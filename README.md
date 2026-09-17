@@ -454,4 +454,124 @@ rule that a missing-data claim should be stated, not invented.
 and "Operations"), but the exact file-format spec only defines 8 sheets with no `Campaign_Performance`
 or `Operations_Performance` sheet. "Campaign" is currently represented by the Top 10 Performing PN
 leaderboard (the closest real data available); there is no "Operations" card yet — send a sheet
-spec for it (sheet name + exact columns) and it can be added the same way as the other seven.
+spec for it (sheet name + exact columns) and it can be added the same way as the other seven.## Production hardening audit (this pass)
+
+A full audit against "no page invents its own state, one authoritative workflow, zero dummy
+data" turned up and fixed several real bugs — not just the ones explicitly reported:
+
+**The Excel date/time bug** was a classic Excel-serial timezone conversion issue: SheetJS's
+`cellDates: true` constructs date objects using the machine's local clock at read time, so any
+code that then called `.toISOString()` or read the object's getters silently shifted the value —
+reproduced exactly under `TZ=Asia/Kolkata` (`01-Jul` became `2026-06-30`). Fixed in
+`lib/excelDates.ts` by decoding the raw numeric Excel serial directly via `XLSX.SSF.parse_date_code()`,
+never touching a `Date` object at all. Applied to both the CRM input upload and the Performance
+module's month parsing, which had the identical latent bug.
+
+**`/calendar` was still rendering a completely disconnected legacy system** —
+`SlotBoard.tsx`/`TargetingBlock.tsx`/`services/calendar.ts`, the old 7-slot-per-day model against
+`calendar_days`/`calendar_slots` tables — while every other page had long since moved to the real
+`campaigns` table. Rebuilt `/calendar` to read the same `calendar_status = 'UPDATED'` filter Final
+View uses, then deleted the three orphaned files.
+
+**Final QC had silently regressed to a no-op.** The 10-item checklist UI existed in the codebase
+but was never actually rendered in the campaign drawer — "Mark Ready to Publish" set
+`qc_status = 'PASSED'` unconditionally on click. Restored the real checklist and added the
+explicit **Update Calendar** gate: a new `calendar_status` column plus an `update_calendar()`
+Postgres function that re-validates `qc_status = 'PASSED'` server-side before allowing the
+finalize — so this can never be bypassed by a client that skipped the checklist. Final View and
+the Calendar page both filter on this one column exclusively.
+
+**Schema/frontend field-name mismatch.** The UI was writing to `smit_feedback`/`nazia_feedback`,
+columns that don't exist — the real migration created `feedback_1`/`feedback_2`. Every field the
+drawer and export touch is now properly typed on `Campaign` (see `types/campaign.ts`), and every
+`as any` cast that had been masking this class of bug is gone from `CampaignDrawer.tsx` and
+`exportExcel.ts`.
+
+**Three competing recommendation implementations existed simultaneously** — a rules engine
+(`data/mockRecommendations.ts` / `services/recommendations.ts`, never actually rendered), a
+CRM-only dummy-tips panel, and a third hardcoded static string inside the drawer. Deleted the
+first and third; kept the CRM-only dummy-tips panel as the one implementation, now gated to
+appear specifically once Category has submitted (`category_status = 'LOCKED'`) rather than
+unconditionally.
+
+**CRM Review was implicit, not a real gate.** Approving a Category submission and starting Part 2
+(Title Brief, PN Template, etc.) used to be the same action. Added an explicit Approve /
+Request Changes step: Part 2 fields stay locked until CRM approves, and Request Changes reopens
+the submission for Category with a reason, logged.
+
+**Bulk "Send to Content & Design" sent everything ready, with no selection.** Added real
+multi-select checkboxes plus a Select All toggle in CRM Own Campaigns — CRM chooses which
+campaigns to route, not an implicit "send all."
+
+**Locked Category edits could silently overwrite the submitted value with no audit trail.**
+Category's "Completed" view now shows locked fields read-only with an Edit action that routes
+through the existing `change_requests` table (original value → requested value → reason → who →
+when), reviewed on the Changes page — the original submission is never lost.
+
+**`workflow_status` (added in an earlier migration) was write-once and never kept in sync** with
+the five real status columns the UI actually uses — exactly the "two status models that can
+silently disagree" risk. Added a trigger (`09_calendar_and_sync.sql`) that keeps it an
+always-accurate mirror on every write, even though nothing currently reads it.
+
+**The progress bar used arbitrary percentage thresholds** ("published > 30% of total → stage 6")
+instead of literal per-stage counts. Rebuilt as a real funnel: the exact number of campaigns
+sitting in each of the 8 stages right now, with zero dependence on the current date or days
+elapsed — an empty database shows every stage at exactly zero.
+
+**A real, demonstrable submission-blocking bug**: the Add Campaign modal's Segment/Category
+dropdowns already correctly drew from `masterData.json` (77 segments), but submission was
+blocked if the pair wasn't also present in a smaller, separately-maintained `approved_pairs` SQL
+table (~50 pairs from one source document). A valid, real selection could be rejected. The pair
+check is now informational only — shown as a hint, never blocking.
+
+### Known open item: two segment/category sources still exist
+
+`masterData.json` (used by every dropdown in the app) and the `pncc_segments`/`pncc_categories`/
+`approved_pairs` SQL tables (used only for the now-non-blocking hint in Add Campaign, and the
+read-only Audiences page) are not reconciled — they came from different source documents at
+different points in this project. `masterData.json` is the de facto authoritative one since it's
+what every real input path uses. Fully reconciling the SQL tables against it — or retiring them —
+is worth doing but wasn't safe to do blind (no complete, verified pairs list was available to
+substitute in without risking a different kind of silent data error).
+
+---
+
+## Production workflow — no seed/demo data required
+
+As of this version, the app assumes real CRM input files from the start. `03_seed.sql` still
+exists in the repo but is **local-testing only** — do not run it against a production database.
+There is no "Populate Month Campaigns" auto-generation button anymore; that was a random shuffle
+generator meant for demos, and it's been removed along with `services/populate.ts` and the old
+in-app slot-editing sheet.
+
+The real flow, end to end:
+
+1. **CRM uploads the initial input file** (`Upload CRM Input` on the CRM dashboard) — a workbook
+   with Day, Time, Slot, Segment, Category columns. Header names are matched by meaning (see the
+   Performance module's parsing notes below) — exact wording doesn't matter, and the real header
+   row is found automatically even if there's a title row above it.
+2. **CRM separately uploads a CRM Self PNs file** (`Upload CRM Self PNs`, same column shape) for
+   campaigns CRM owns end-to-end — these skip the Category step entirely (`category_status` is
+   set to `LOCKED` on arrival) and go straight into CRM's own completion queue.
+3. The first upload is what Category sees under **Incoming Data** on their dashboard. Category
+   fills Sub Category, Brand, Offer, Brief, Landing, CVR, RPV, then bulk-submits back to CRM.
+4. Category can also raise an **Emergency push** at any time — time is a required field for this
+   (not optional), since CRM accepts it directly into that slot. CRM reviews the Emergency queue
+   and either **Accepts** (moves it into the normal review pipeline at the time Category gave) or
+   **Rejects with a reason** (visible back to Category, campaign is marked Blocked).
+5. Once CRM has reviewed Category's submissions and completed its own Part 2 fields (Title Brief,
+   Message Brief, PN Template, Creative Requirements) on the **CRM Own Campaigns** panel, CRM
+   clicks **Send to Content & Design** — a single bulk action that routes the batch to both teams
+   at once.
+6. **Content** and **Design** each see their own queue (Content via Incoming Data on their
+   dashboard, Design via the dedicated **Design Queue** nav item) and each has a bulk
+   "submit back to CRM" action once their part is done.
+7. CRM's **Final View** (new nav item, CRM-only) shows everything that has cleared Category, CRM,
+   Content and Design, with a **Download final sheet** button — the single consolidated export.
+
+Every bulk transition writes to `activity_logs` automatically (`CRM_INPUT_UPLOAD`,
+`CATEGORY_BULK_SUBMIT`, `EMERGENCY_ACCEPTED`/`EMERGENCY_REJECTED`, `SENT_TO_CONTENT_AND_DESIGN`,
+`CONTENT_BULK_SUBMIT`, `DESIGN_BULK_SUBMIT`), and the calendar reflects every status change live
+since it reads the same campaign records — there's no separate sync step.
+
+
