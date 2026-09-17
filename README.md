@@ -454,7 +454,21 @@ rule that a missing-data claim should be stated, not invented.
 and "Operations"), but the exact file-format spec only defines 8 sheets with no `Campaign_Performance`
 or `Operations_Performance` sheet. "Campaign" is currently represented by the Top 10 Performing PN
 leaderboard (the closest real data available); there is no "Operations" card yet — send a sheet
-spec for it (sheet name + exact columns) and it can be added the same way as the other seven.## Production hardening audit (this pass)
+spec for it (sheet name + exact columns) and it can be added the same way as the other seven.## Seeing data already in the dashboard? Reset it.
+
+If every role logs in and already sees campaigns instead of a genuinely empty state, that's
+`03_seed.sql` — it's designed for local testing only, but once it's been run against your real
+Supabase project, that data stays there until explicitly cleared (the app can't tell a seeded
+campaign apart from a real one; that's by design, since they're the same shape).
+
+**Run `supabase/RESET_ALL_DATA.sql`** in the Supabase SQL Editor to clear every campaign and
+everything that hangs off one (activity logs, notifications, change requests, QC checklists,
+content submissions, CRM decisions) — nothing else touches your schema, your accounts, or your
+master reference data (segments, categories, brands, offers). Reload the app afterward; every
+dashboard, every queue, and the workflow flowchart at the top will read exactly zero until CRM
+uploads a real input file. Safe to re-run any time you want a clean slate again.
+
+## Production hardening audit (this pass)
 
 A full audit against "no page invents its own state, one authoritative workflow, zero dummy
 data" turned up and fixed several real bugs — not just the ones explicitly reported:
