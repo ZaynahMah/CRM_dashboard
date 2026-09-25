@@ -1,4 +1,4 @@
-# Push Operations — Tata CLiQ Fashion & Luxury
+# Push Operations — Tata CLiQ Fashion and luxury
 
 An internal control centre for push notification planning, review and production.
 Next.js 14 (App Router) + TypeScript + Tailwind, with Supabase as the source of truth.
