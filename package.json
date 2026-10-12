@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify": "bash scripts/verify-package.sh",
-    "preflight": "npm run verify && npm test && npx tsc --noEmit && npm run build"
+    "preflight": "npm run verify && npm test && npx tsc --noEmit && npm run build",
+    "db-qc": "bash scripts/db-qc.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
