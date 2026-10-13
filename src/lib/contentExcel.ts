@@ -220,22 +220,9 @@ export function parseContentWorkbook(
 /** Counts are derived here too, so Excel can never disagree with the app. */
 export const countOf = (s: string) => (s ?? "").trim().length;
 
-/* ───────────────────────── ranges (1-based, inclusive) ───────────────────────── */
-
-/**
- * The UI speaks in 1-based, INCLUSIVE row numbers, because that is what a
- * person reading a spreadsheet sees: "1–100" is the first hundred rows and
- * "101–200" is the next hundred. Nothing in the interface exposes a
- * 0-based index.
- *
- * Returns the array slice bounds, so consecutive batches never overlap or
- * skip a row.
- */
-export function rangeToSlice(fromOneBased: number, toOneBased: number, total: number) {
-  const from = Math.max(1, Math.floor(fromOneBased || 1));
-  const to = Math.max(from, Math.floor(toOneBased || from));
-  return { start: Math.min(from - 1, total), end: Math.min(to, total), from, to };
-}
+/* Row-range export was REMOVED: Content plans by date, not by row number.
+   Date-range filtering lives in lib/dateRange.ts, which is deliberately
+   generic so CRM, Category, Executive and audit exports can reuse it. */
 
 /* ───────────────────────── validation ───────────────────────── */
 

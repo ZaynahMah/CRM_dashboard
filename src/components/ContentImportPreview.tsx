@@ -176,9 +176,15 @@ export function ContentImportPreview({
                         return n;
                       })} />
                     <span className="text-[13px] font-medium text-heading">{c.campaign_name}</span>
-                    <span className="text-micro text-faint">
+                    {/* Campaign Date and Campaign ID: the two things that tie
+                        this row back to the exported sheet. The id is shown
+                        in full, not truncated, so it can be copied. */}
+                    <span className="text-micro font-medium text-body">
                       {fmtDate(c.launch_date)} · {fmtTime(c.launch_time)}
-                      {c.brand ? ` · ${c.brand}` : ""}
+                    </span>
+                    <span className="font-mono text-[10px] text-faint">{c.id}</span>
+                    <span className="text-micro text-faint">
+                      {c.brand ? `${c.brand}` : ""}
                       {c.offer ? ` · ${c.offer}` : ""}
                     </span>
                     {savingId === c.id && <span className="text-micro text-faint">saving...</span>}
@@ -218,7 +224,7 @@ export function ContentImportPreview({
                     </label>
                     <label className="block">
                       <span className="text-micro uppercase tracking-wide text-faint">
-                        Sub Copy · {s}/{SUB_COPY_LIMIT}
+                        Sub Header (Sub Copy) · {s}/{SUB_COPY_LIMIT}
                         {s > SUB_COPY_LIMIT && <span className="ml-1 text-danger-700">over limit</span>}
                       </span>
                       <textarea
@@ -239,11 +245,32 @@ export function ContentImportPreview({
                         onBlur={() => commit(c, "reference_link")}
                         className="mt-1 !text-[12.5px]" />
                     </label>
+                    {/* Read-only context, shown in FULL — whitespace-pre-wrap
+                        and no line clamp, so nothing needs a hover tooltip. */}
+                    {c.message_brief && (
+                      <div>
+                        <span className="text-micro uppercase tracking-wide text-faint">Message Brief</span>
+                        <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted">
+                          {c.message_brief}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-2 grid gap-3 lg:grid-cols-2">
                     {c.brief && (
                       <div>
                         <span className="text-micro uppercase tracking-wide text-faint">Category Brief</span>
                         <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted">
                           {c.brief}
+                        </p>
+                      </div>
+                    )}
+                    {c.additional_notes && (
+                      <div>
+                        <span className="text-micro uppercase tracking-wide text-faint">Remarks</span>
+                        <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted">
+                          {c.additional_notes}
                         </p>
                       </div>
                     )}

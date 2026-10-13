@@ -73,6 +73,7 @@ src/components/SearchSelect.tsx
 src/components/SessionProvider.tsx
 src/components/StatusChip.tsx
 src/components/SystemNotifications.tsx
+src/components/TeamSlaDashboard.tsx
 src/components/TopLeaderboard.tsx
 src/components/TotalAnalysisPanel.tsx
 src/components/TrendSection.tsx
@@ -96,11 +97,14 @@ src/lib/contentExcel.test.ts
 src/lib/contentExcel.ts
 src/lib/crmBuckets.test.ts
 src/lib/crmBuckets.ts
+src/lib/dateRange.test.ts
+src/lib/dateRange.ts
 src/lib/deadlines.ts
 src/lib/e2e.test.ts
 src/lib/excelDates.ts
 src/lib/format.ts
 src/lib/monthlyWorkflow.ts
+src/lib/noTruncation.test.ts
 src/lib/paging.test.ts
 src/lib/paging.ts
 src/lib/performanceAnalysis.ts
@@ -110,6 +114,8 @@ src/lib/qcGate.test.ts
 src/lib/sheetProfile.ts
 src/lib/sqlSafety.test.ts
 src/lib/supabase.ts
+src/lib/teamSla.test.ts
+src/lib/teamSla.ts
 src/lib/trackingCode.test.ts
 src/lib/trackingCode.ts
 src/lib/trackingMasters.ts

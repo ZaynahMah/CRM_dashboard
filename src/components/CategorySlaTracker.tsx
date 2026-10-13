@@ -8,7 +8,8 @@ import { Button, Card, Pill, Empty } from "./ui";
 import { fmtDate } from "@/lib/format";
 
 /**
- * "Category SLA & Defaults" — a NEW section. No existing screen was changed.
+ * "Team SLA & Defaults" — the per-week detail table, kept for the CRM
+ * override action. The dashboard cards live in TeamSlaDashboard.tsx.
  *
  * One row per category per business week: who submitted on time, who is due
  * soon, who is overdue, and who has defaulted. A default never blocks
@@ -41,7 +42,7 @@ export function CategorySlaTracker({ rows, isCrm, onChanged }: {
   return (
     <Card pad={false}>
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3.5">
-        <h3 className="font-display text-[15px] font-600 text-heading">Category SLA &amp; Defaults</h3>
+        <h3 className="font-display text-[15px] font-600 text-heading">Team SLA &amp; Defaults</h3>
         <span className="text-micro text-faint">
           Deadline is the campaign week start minus 7 days
         </span>

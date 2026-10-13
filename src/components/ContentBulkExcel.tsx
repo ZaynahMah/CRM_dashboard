@@ -2,7 +2,10 @@
 
 import { useRef, useState } from "react";
 import type { Campaign } from "@/types/campaign";
-import { buildContentWorkbook, parseContentWorkbook, rangeToSlice } from "@/lib/contentExcel";
+import { buildContentWorkbook, parseContentWorkbook } from "@/lib/contentExcel";
+import {
+  summariseRange, validateRange, currentMonthRange, type DateRange,
+} from "@/lib/dateRange";
 import {
   saveImportedContent, bulkSendToCrm, fetchCampaignsByIds, logExport, pendingForContent,
 } from "@/services/contentBulk";
@@ -26,11 +29,13 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
   onChanged: () => void;
 }) {
   /** Export mode. Pending is primary: Content thinks in outstanding work. */
-  const [mode, setMode] = useState<"pending" | "range">("pending");
-  // 1-based and inclusive, as a person reads a spreadsheet. No 0-based
-  // index is shown anywhere in this UI.
-  const [from, setFrom] = useState("1");
-  const [to, setTo] = useState("100");
+  const [mode, setMode] = useState<"pending" | "dates">("pending");
+  /**
+   * A DATE range, not a row range. Content plans by date — "1 Oct to 10
+   * Oct" — and CRM may send a whole month at once. Row numbers meant
+   * nothing to them.
+   */
+  const [range, setRange] = useState<DateRange>(() => currentMonthRange());
   const [busy, setBusy] = useState<null | "export" | "import" | "send">(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
@@ -46,9 +51,13 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
   const clear = () => { setErrors([]); setWarnings([]); setNote(null); setOutcomes(null); };
 
   const pending = pendingForContent(campaigns);
-  const r = rangeToSlice(parseInt(from, 10), parseInt(to, 10), campaigns.length);
-  const slice = mode === "pending" ? pending : campaigns.slice(r.start, r.end);
-  const rangeLabel = mode === "pending" ? "pending rows" : `rows ${r.from}–${r.to}`;
+  const rangeCheck = validateRange(range);
+  // Everything the modal shows before the download: count, categories and
+  // the range in words, so Content can confirm the batch is the right one.
+  const summary = summariseRange(campaigns, range,
+    (c) => c.launch_date, (c) => c.category ?? c.pncc_category_code);
+  const slice = mode === "pending" ? pending : summary.items;
+  const rangeLabel = mode === "pending" ? "pending rows" : summary.label;
 
   /**
    * One active imported batch at a time. Until it is sent or cancelled a
@@ -60,10 +69,16 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
   /* ---------------- export ---------------- */
   const doExport = async () => {
     clear();
+    if (mode === "dates" && !rangeCheck.valid) {
+      setErrors([rangeCheck.error ?? "Choose a valid date range."]);
+      return;
+    }
+    // Never generate an empty workbook: a file with headers and no rows
+    // looks like a successful export and wastes a round trip.
     if (slice.length === 0) {
       setErrors([mode === "pending"
         ? "You have no pending rows — everything assigned to you has been submitted."
-        : `No rows in ${rangeLabel}. You have ${campaigns.length} assigned rows.`]);
+        : "No campaigns found for selected date range."]);
       return;
     }
     setBusy("export");
@@ -78,11 +93,10 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
       a.href = url;
       a.download = mode === "pending"
         ? `content-worklist-pending-${slice.length}.xlsx`
-        : `content-worklist-${r.from}-${r.to}.xlsx`;
+        : `content-worklist-${range.start}-to-${range.end}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
-      await logExport(slice.length, mode === "pending" ? 1 : r.from,
-        mode === "pending" ? slice.length : r.to, profileId);
+      await logExport(slice.length, mode, rangeLabel, profileId);
       setNote(`Exported ${slice.length} ${rangeLabel}. Fill the Header and Sub Copy columns, then import the same file back.`);
     } catch (e) {
       setErrors([e instanceof Error ? e.message : String(e)]);
@@ -163,28 +177,30 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
             onClick={() => setMode("pending")}>
             Pending rows only ({pending.length})
           </Button>
-          <Button size="sm" variant={mode === "range" ? "primary" : "ghost"}
-            onClick={() => setMode("range")}>
-            Row range
+          <Button size="sm" variant={mode === "dates" ? "primary" : "ghost"}
+            onClick={() => setMode("dates")}>
+            Date range
           </Button>
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          {mode === "range" && (
+          {mode === "dates" && (
             <>
-              <Field label="From row" hint="first row, counting from 1">
-                <input className="!w-[110px]" inputMode="numeric" value={from}
-                  onChange={(e) => setFrom(e.target.value)} />
+              <Field label="Start Date" hint="campaign date, included">
+                <input type="date" className="!w-[160px]" value={range.start}
+                  onChange={(e) => setRange((r) => ({ ...r, start: e.target.value }))} />
               </Field>
-              <Field label="To row" hint="included">
-                <input className="!w-[110px]" inputMode="numeric" value={to}
-                  onChange={(e) => setTo(e.target.value)} />
+              <Field label="End Date" hint="included">
+                <input type="date" className="!w-[160px]" value={range.end}
+                  onChange={(e) => setRange((r) => ({ ...r, end: e.target.value }))} />
               </Field>
             </>
           )}
 
-          <Button size="sm" disabled={busy !== null} onClick={doExport}>
-            {busy === "export" ? "Preparing..." : `Export ${slice.length} rows`}
+          <Button size="sm"
+            disabled={busy !== null || (mode === "dates" && !rangeCheck.valid)}
+            onClick={doExport}>
+            {busy === "export" ? "Preparing..." : "Export Excel"}
           </Button>
 
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden"
@@ -194,7 +210,40 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
             {busy === "import" ? "Importing..." : "Import Excel"}
           </Button>
 
-          {batchLocked && (
+          {mode === "dates" && (
+          <div className="mt-3 rounded-lg border border-line px-4 py-3">
+            {!rangeCheck.valid ? (
+              <p className="text-tiny text-danger-700">{rangeCheck.error}</p>
+            ) : (
+              <dl className="flex flex-wrap gap-x-8 gap-y-2">
+                <div>
+                  <dt className="text-micro uppercase tracking-wide text-faint">Date Range</dt>
+                  <dd className="text-tiny font-medium text-heading">{summary.label}</dd>
+                </div>
+                <div>
+                  <dt className="text-micro uppercase tracking-wide text-faint">Campaigns Found</dt>
+                  <dd className={`text-tiny font-medium tabular-nums ${
+                    summary.count === 0 ? "text-danger-700" : "text-heading"}`}>
+                    {summary.count}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-micro uppercase tracking-wide text-faint">Categories</dt>
+                  <dd className="text-tiny text-body">
+                    {summary.categories.length > 0 ? summary.categories.join(", ") : "—"}
+                  </dd>
+                </div>
+              </dl>
+            )}
+            {rangeCheck.valid && summary.count === 0 && (
+              <p className="mt-2 text-tiny text-danger-700">
+                No campaigns found for selected date range.
+              </p>
+            )}
+          </div>
+        )}
+
+        {batchLocked && (
             <>
               <Button size="sm" variant="ghost" disabled={busy !== null}
                 onClick={() => setPreviewOpen(true)}>
@@ -221,6 +270,39 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
             </>
           )}
         </div>
+
+        {mode === "dates" && (
+          <div className="mt-3 rounded-lg border border-line px-4 py-3">
+            {!rangeCheck.valid ? (
+              <p className="text-tiny text-danger-700">{rangeCheck.error}</p>
+            ) : (
+              <dl className="flex flex-wrap gap-x-8 gap-y-2">
+                <div>
+                  <dt className="text-micro uppercase tracking-wide text-faint">Date Range</dt>
+                  <dd className="text-tiny font-medium text-heading">{summary.label}</dd>
+                </div>
+                <div>
+                  <dt className="text-micro uppercase tracking-wide text-faint">Campaigns Found</dt>
+                  <dd className={`text-tiny font-medium tabular-nums ${
+                    summary.count === 0 ? "text-danger-700" : "text-heading"}`}>
+                    {summary.count}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-micro uppercase tracking-wide text-faint">Categories</dt>
+                  <dd className="text-tiny text-body">
+                    {summary.categories.length > 0 ? summary.categories.join(", ") : "—"}
+                  </dd>
+                </div>
+              </dl>
+            )}
+            {rangeCheck.valid && summary.count === 0 && (
+              <p className="mt-2 text-tiny text-danger-700">
+                No campaigns found for selected date range.
+              </p>
+            )}
+          </div>
+        )}
 
         {batchLocked && (
           <div className="mt-3 rounded-lg bg-warning-50 px-3 py-2.5 text-tiny text-warning-700">

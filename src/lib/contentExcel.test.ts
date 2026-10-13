@@ -257,38 +257,7 @@ describe("QC scenarios", () => {
   });
 });
 
-/* ══════════ 1-based inclusive ranges ══════════ */
-import { rangeToSlice, validateContentRow, diffContentFields, DIFF_LABEL } from "./contentExcel";
-
-describe("row ranges are 1-based and inclusive", () => {
-  it("1–100 is the first hundred rows", () => {
-    const r = rangeToSlice(1, 100, 250);
-    expect(r.start).toBe(0); expect(r.end).toBe(100);
-    expect(make(250).slice(r.start, r.end)).toHaveLength(100);
-  });
-
-  it("101–200 is the NEXT hundred, with no overlap and no gap", () => {
-    const all = make(250);
-    const a = rangeToSlice(1, 100, 250);
-    const b = rangeToSlice(101, 200, 250);
-    const first = all.slice(a.start, a.end).map((c) => c.id);
-    const second = all.slice(b.start, b.end).map((c) => c.id);
-    expect(second).toHaveLength(100);
-    expect(first.filter((id) => second.includes(id))).toHaveLength(0);   // no overlap
-    expect(all[100].id).toBe(second[0]);                                  // no gap
-  });
-
-  it("201–300 clamps to what exists", () => {
-    const r = rangeToSlice(201, 300, 250);
-    expect(make(250).slice(r.start, r.end)).toHaveLength(50);
-  });
-
-  it("nonsense input cannot produce a negative or inverted range", () => {
-    expect(rangeToSlice(0, 0, 10).start).toBe(0);
-    expect(rangeToSlice(-5, -1, 10).start).toBe(0);
-    expect(rangeToSlice(50, 10, 10).end).toBeGreaterThanOrEqual(rangeToSlice(50, 10, 10).start);
-  });
-});
+import { validateContentRow, diffContentFields, DIFF_LABEL } from "./contentExcel";
 
 /* ══════════ mandatory field validation ══════════ */
 describe("bulk send validation", () => {

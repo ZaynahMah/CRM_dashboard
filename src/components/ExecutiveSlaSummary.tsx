@@ -4,7 +4,7 @@ import { Card, Pill, Empty } from "./ui";
 import type { SlaSummary } from "@/services/categorySla";
 
 /**
- * Executive view of the Category SLA — a NEW component. The existing
+ * Executive view of Team SLA & Accountability. The existing
  * Executive dashboard was not modified; this is added alongside it.
  *
  * Counts come from `category_sla_summary()`, a SECURITY DEFINER function
@@ -28,7 +28,7 @@ export function ExecutiveSlaSummary({ summary, trend, offenders }: {
   return (
     <div className="space-y-5">
       <Card>
-        <h3 className="mb-3 font-display text-[15px] font-600 text-heading">Category SLA Summary</h3>
+        <h3 className="mb-3 font-display text-[15px] font-600 text-heading">Team SLA Summary</h3>
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {cards.map((c) => (
             <div key={c.label} className="rounded-lg border border-line px-3 py-2.5">

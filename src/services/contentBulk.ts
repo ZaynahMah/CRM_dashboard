@@ -189,10 +189,16 @@ export async function fetchCampaignsByIds(ids: string[]): Promise<Campaign[]> {
   return out;
 }
 
-/** Records the export, so the audit trail covers the whole round trip. */
-export const logExport = (count: number, from: number, to: number, profileId: string) =>
+/**
+ * Records the export, so the audit trail covers the whole round trip.
+ * `scope` is the human description — "pending rows" or "1 Oct → 10 Oct" —
+ * because a row number meant nothing to anyone reading the log later.
+ */
+export const logExport = (
+  count: number, mode: "pending" | "dates", scope: string, profileId: string
+) =>
   log(null, profileId, "CONTENT_EXCEL_EXPORT",
-    `Content exported ${count} rows to Excel (range ${from}–${to}).`);
+    `Content exported ${count} rows to Excel (${mode === "pending" ? "pending rows" : scope}).`);
 
 /* ───────────────────────── pending work + CRM diff ───────────────────────── */
 

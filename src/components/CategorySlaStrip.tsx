@@ -33,7 +33,7 @@ export function CategorySlaStrip() {
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="text-[13px] font-600 text-heading">Category SLA</span>
+        <span className="text-[13px] font-600 text-heading">Team SLA</span>
 
         <div className="flex flex-wrap items-center gap-2">
           <Pill dot={false} label={`${s.on_time} on time`} tone="success" />

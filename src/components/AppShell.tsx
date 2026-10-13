@@ -12,7 +12,7 @@ const NAV: NavItem[] = [
   { group:"General",href:"/campaigns",label:"All Campaigns",icon:Icon.list,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"General",href:"/calendar",label:"Calendar",icon:Icon.calendar,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"Planning",href:"/segments",label:"Audiences",icon:Icon.target,roles:["CRM"] },
-  { group:"Planning",href:"/sla",label:"Category SLA",icon:Icon.alert,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
+  { group:"Planning",href:"/sla",label:"Team SLA & Accountability",icon:Icon.alert,roles:["CRM","EXECUTIVE"] },
   { group:"Planning",href:"/emergency",label:"Emergency",icon:Icon.alert,roles:["CATEGORY","CRM","CONTENT"] },
   { group:"Execution",href:"/final-view",label:"Final View",icon:Icon.list,roles:["CRM"] },
   { group:"Execution",href:"/qc",label:"Final QC",icon:Icon.check,roles:["CRM"] },

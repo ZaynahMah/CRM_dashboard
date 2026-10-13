@@ -66,6 +66,11 @@ interface ColumnDef {
   type?: "text" | "bool" | "brand" | "readonly" | "select";
   /** Allowed values when type is "select". */
   options?: readonly string[];
+  /**
+   * Long copy. Rendered wrapped and in full — never clipped, never behind
+   * a tooltip. Content has to scan 60 rows without opening each one.
+   */
+  longText?: boolean;
   /** Optional display labels, keyed by value. The stored value is unchanged. */
   labels?: Record<string, string>;
   /**
@@ -90,15 +95,25 @@ const CATEGORY_INPUT_COLUMNS: ColumnDef[] = [
 ];
 
 /** What Content fills in. H/S counts stay derived, never typed. */
+/**
+ * Content's list view. Every copy field is marked longText so it wraps and
+ * shows in full: Content was opening each record one at a time just to read
+ * a sentence.
+ *
+ * Widths are kept moderate on purpose. The brief asked for taller rows and
+ * wrapped text rather than a table so wide it scrolls sideways forever.
+ */
 const CONTENT_INPUT_COLUMNS: ColumnDef[] = [
-  { key: "campaign_name", label: "Campaign Name", width: 190, type: "readonly" },
-  { key: "brand", label: "Brand", width: 140, type: "readonly" },
-  { key: "offer", label: "Offer", width: 150, type: "readonly" },
-  { key: "title_brief", label: "Title Brief", width: 190, type: "readonly" },
-  { key: "message_brief", label: "Message Brief", width: 190, type: "readonly" },
-  { key: "header", label: "Header", width: 220 },
-  { key: "sub_copy_text", label: "Sub Copy", width: 220 },
-  { key: "reference_link", label: "Reference Link", width: 180 },
+  { key: "campaign_name", label: "Campaign Name", width: 170, type: "readonly" },
+  { key: "brand", label: "Brand", width: 110, type: "readonly" },
+  { key: "offer", label: "Offer", width: 120, type: "readonly" },
+  { key: "title_brief", label: "Title Brief", width: 200, type: "readonly", longText: true },
+  { key: "message_brief", label: "Message Brief", width: 230, type: "readonly", longText: true },
+  { key: "brief", label: "Category Brief", width: 230, type: "readonly", longText: true },
+  { key: "additional_notes", label: "Remarks", width: 190, type: "readonly", longText: true },
+  { key: "header", label: "Header", width: 260, longText: true },
+  { key: "sub_copy_text", label: "Sub Copy", width: 280, longText: true },
+  { key: "reference_link", label: "Reference Link", width: 170 },
 ];
 
 /** CRM Part 2 — what has to be filled before work goes to Content. */
@@ -427,13 +442,28 @@ export function BulkWorkspace({
 
   // Generous overscan: a dropdown open on a row scrolled just out of view
   // must not be unmounted mid-interaction.
+  /**
+   * Rows grow with their content here, so the fixed-height virtualizer's
+   * arithmetic no longer holds. For Content's list the whole set is
+   * rendered: this view exists to be scanned, and a clipped sentence is
+   * worse than a longer DOM.
+   *
+   * Above the threshold virtualization stays on. Text still wraps in full —
+   * only the scrollbar becomes approximate, which is a far smaller problem
+   * than truncation.
+   */
+  const wrapRows = mode === "CONTENT_INPUT";
+  const NATURAL_HEIGHT_LIMIT = 400;
+  const renderAll = wrapRows && campaigns.length <= NATURAL_HEIGHT_LIMIT;
+
   const OVERSCAN = 12;
-  const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const visibleCount = Math.ceil(viewportH / ROW_HEIGHT) + OVERSCAN * 2;
-  const last = Math.min(campaigns.length, first + visibleCount);
+  const rowH = wrapRows ? 96 : ROW_HEIGHT;      // wrapped rows are taller
+  const first = renderAll ? 0 : Math.max(0, Math.floor(scrollTop / rowH) - OVERSCAN);
+  const visibleCount = Math.ceil(viewportH / rowH) + OVERSCAN * 2;
+  const last = renderAll ? campaigns.length : Math.min(campaigns.length, first + visibleCount);
   const visibleRows = campaigns.slice(first, last);
-  const padTop = first * ROW_HEIGHT;
-  const padBottom = Math.max(0, (campaigns.length - last) * ROW_HEIGHT);
+  const padTop = renderAll ? 0 : first * rowH;
+  const padBottom = renderAll ? 0 : Math.max(0, (campaigns.length - last) * rowH);
   const primaryLabel =
     mode === "FINAL_QC" ? "Bulk Push To Calendar"
     : mode === "CATEGORY_INPUT" ? "Lock & Submit To CRM"
@@ -625,7 +655,8 @@ export function BulkWorkspace({
                   </td>
 
                   {columns.map((col) => (
-                    <td key={String(col.key)} className="border-b border-r border-line p-0">
+                    <td key={String(col.key)}
+                      className={`border-b border-r border-line p-0 ${wrapRows ? "align-top" : ""}`}>
                       {col.type === "bool" ? (
                         <div className="flex justify-center py-1.5">
                           <input type="checkbox" checked={boolOf(c, col.key)}
@@ -648,10 +679,26 @@ export function BulkWorkspace({
                             <option key={o} value={o}>{col.labels?.[o] ?? o}</option>
                           ))}
                         </select>
+                      ) : col.type === "readonly" && col.longText ? (
+                        /* Full text, wrapped, whitespace preserved. No
+                           line-clamp, no ellipsis, no title tooltip. */
+                        <span className="block whitespace-pre-wrap break-words px-2 py-1.5 text-[12.5px] leading-relaxed text-muted">
+                          {valueOf(c, col.key) || "—"}
+                        </span>
                       ) : col.type === "readonly" ? (
                         <span className="block px-2 py-1.5 text-[12.5px] text-muted">
                           {valueOf(c, col.key) || "—"}
                         </span>
+                      ) : col.longText ? (
+                        /* An auto-growing textarea, not a single-line input:
+                           an input clips a long sentence at the cell edge and
+                           forces the user to scroll inside it. */
+                        <textarea
+                          value={valueOf(c, col.key)}
+                          rows={Math.max(2, Math.ceil((valueOf(c, col.key) || "").length / 34))}
+                          onChange={(e) => setField(c.id, col.key, e.target.value)}
+                          className="!m-0 !block !w-full !resize-y !rounded-none !border-0 !bg-transparent !px-2 !py-1.5 !text-[12.5px] !leading-relaxed"
+                        />
                       ) : (
                         <input
                           value={valueOf(c, col.key)}

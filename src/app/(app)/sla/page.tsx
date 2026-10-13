@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
-import { Card, Loading, PageHead, Tabs } from "@/components/ui";
+import { Card, Empty, Loading, PageHead, Tabs } from "@/components/ui";
 import { CategorySlaTracker } from "@/components/CategorySlaTracker";
 import { ActivitiesPanel } from "@/components/ActivitiesPanel";
 import { SystemNotifications } from "@/components/SystemNotifications";
 import { ExecutiveSlaSummary } from "@/components/ExecutiveSlaSummary";
 import { ExecutiveDefaultRate } from "@/components/ExecutiveDefaultRate";
+import { TeamSlaDashboard } from "@/components/TeamSlaDashboard";
 import {
   listSla, listActivities, listSystemNotifications,
   slaSummary, slaTrend, slaOffenders,
@@ -55,37 +56,54 @@ export default function SlaPage() {
 
   if (!profile) return null;
   const isCrm = profile.role === "CRM";
-  const isExec = profile.role === "EXECUTIVE";
+  // Operational management view. Category, Content and Design must not see
+  // it; middleware redirects them, and this is the second line of defence
+  // in case the route table and this page ever drift apart.
+  if (profile.role !== "CRM" && profile.role !== "EXECUTIVE") {
+    return (
+      <Card>
+        <Empty title="Not available"
+          hint="Team SLA & Accountability is available to CRM and Executive accounts." />
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-5">
-      <PageHead title="Category SLA"
-        sub="Who submitted on time, who is due soon, and who has defaulted. A default never blocks a campaign." />
+      <PageHead title="Team SLA & Accountability"
+        sub="What to follow up today: who is at risk, which deadlines are next, and where inputs are missing." />
 
       {setupMsg && <Card><p className="text-tiny text-warning-700">{setupMsg}</p></Card>}
 
       <Tabs active={tab} onChange={setTab} tabs={[
-        { key: "sla", label: "SLA & Defaults", count: rows.length },
-        { key: "activities", label: "Activities", count: activities.length },
+        { key: "sla", label: "Team Health", count: rows.length },
+        { key: "activities", label: "Activity Feed", count: activities.length },
         { key: "notifications", label: "Notifications", count: notifications.length },
-        ...(isExec ? [{ key: "exec", label: "Executive summary", count: summary.total }] : []),
+        { key: "exec", label: "Default Rate & Trends", count: summary.total },
       ]} />
 
       {loading ? <Loading label="Loading SLA data" /> : (
         <>
           {tab === "sla" && (
             <>
+              {/* Cards 1-4 and 6: health, actions, deadlines, defaults,
+                  accountability. Dashboard-first, tables only where a table
+                  is genuinely the clearest form. */}
+              <TeamSlaDashboard rows={rows} />
+              {/* The per-week table, kept because it carries the CRM
+                  override action the dashboard deliberately does not. */}
               <CategorySlaTracker rows={rows} isCrm={isCrm} onChanged={load} />
-              {/* Directly BELOW the submission deadlines, in the same
-                  governance area: upcoming deadlines, missed deadlines, then
-                  recurring default behaviour. Reporting only. */}
-              <ExecutiveDefaultRate />
             </>
           )}
+          {/* Card 5: the activity feed lives inside this experience rather
+              than on a screen of its own. */}
           {tab === "activities" && <ActivitiesPanel activities={activities} />}
           {tab === "notifications" && <SystemNotifications notifications={notifications} />}
-          {tab === "exec" && isExec && (
-            <ExecutiveSlaSummary summary={summary} trend={trend} offenders={offenders} />
+          {tab === "exec" && (
+            <>
+              <ExecutiveSlaSummary summary={summary} trend={trend} offenders={offenders} />
+              <ExecutiveDefaultRate />
+            </>
           )}
         </>
       )}

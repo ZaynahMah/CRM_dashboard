@@ -3,7 +3,7 @@
 import { supabase } from "@/lib/supabase";
 
 /**
- * Category SLA, Activities and shared Notifications.
+ * Team SLA & Accountability, Activities and shared Notifications.
  *
  * Three SEPARATE systems by requirement:
  *   category_sla         — state per category per business week
@@ -56,7 +56,7 @@ export interface SlaSummary {
 }
 
 const PENDING =
-  "Category SLA is not set up yet — contact your admin. Migration 24 is required.";
+  "Team SLA is not set up yet — contact your admin. Migration 24 is required.";
 
 function isSetupPending(e: unknown): boolean {
   const err = e as { code?: string; message?: string } | null;

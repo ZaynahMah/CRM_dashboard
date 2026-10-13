@@ -20,7 +20,8 @@ const ROUTE_ROLES: Record<string, readonly string[]> = {
   "/overview":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/campaigns":   ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
-  "/sla":         ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
+  // Operational management view: CRM and leadership only.
+  "/sla":         ["CRM", "EXECUTIVE"],
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
   "/changes":     ["CATEGORY", "CRM"],
   "/performance": ["CRM", "EXECUTIVE"],

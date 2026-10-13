@@ -1,7 +1,7 @@
 import { isoDate, toDate, today, fmtDate, daysBetween } from "./format";
 
 /**
- * Business weeks and the Category SLA.
+ * Business weeks and the Team SLA deadline rule.
  *
  * THE ONE DEADLINE RULE IN THE SYSTEM:
  *     deadline = campaign week START - 7 days
