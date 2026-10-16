@@ -6,6 +6,8 @@ import { useSession } from "./SessionProvider";
 import { signOut } from "@/services/auth";
 import { Drawer } from "./ui";
 import { Icon } from "./icons";
+import { listSystemNotifications, type SystemNotification } from "@/services/categorySla";
+import { fmtDate } from "@/lib/format";
 interface NavItem { href: string; label: string; roles: string[]; icon: () => React.ReactNode; group: string }
 const NAV: NavItem[] = [
   { group:"General",href:"/overview",label:"Dashboard",icon:Icon.home,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
@@ -19,16 +21,33 @@ const NAV: NavItem[] = [
   { group:"Execution",href:"/performance",label:"Performance",icon:Icon.chart,roles:["CRM","EXECUTIVE"] },
   { group:"Execution",href:"/changes",label:"Changes",icon:Icon.swap,roles:["CATEGORY","CRM"] },
 ];
-const ALERTS = [
-  { title:"Submissions due for Kids category today",date:"10 Aug",body:"Campaign details are due today for pushes going live in 7 days.",action:"Email sent to Kids category SPOCs." },
-  { title:"Submissions due for Home category today",date:"10 Aug",body:"Campaign details are due today for pushes going live in 7 days.",action:"Email sent to Home category SPOCs." },
-];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  /**
+   * Real notifications. This used to render a two-item hard-coded fixture
+   * that reappeared on every refresh and every login. It now reads
+   * `system_notifications`, the shared table migration 24 creates, so the
+   * bell shows genuine events or nothing at all.
+   *
+   * A missing table (migration 24 not applied) yields an empty list rather
+   * than an error: the shell must render for every role regardless.
+   */
+  const [alerts, setAlerts] = useState<SystemNotification[]>([]);
+  const [alertsLoaded, setAlertsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    listSystemNotifications(20)
+      .then((rows) => { if (!cancelled) setAlerts(rows); })
+      .catch(() => { if (!cancelled) setAlerts([]); })
+      .finally(() => { if (!cancelled) setAlertsLoaded(true); });
+    return () => { cancelled = true; };
+  }, [profile]);
   useEffect(() => { if (!loading && !profile) router.replace("/login"); }, [loading, profile, router]);
   useEffect(() => { setNavOpen(false); }, [pathname]);
   if (loading || !profile) return <div className="grid h-screen place-items-center"><span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" /></div>;
@@ -62,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button onClick={() => setNavOpen(true)} className="rounded p-1 text-muted lg:hidden"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg></button>
           <span className="hidden text-tiny text-faint sm:block">Pages / <span className="font-medium text-heading">{current?.label ?? "Dashboard"}</span></span>
           <div className="ml-auto flex items-center gap-3">
-            <button onClick={() => setNotifOpen(true)} className="relative rounded-lg p-2 text-muted hover:bg-[#F9FAFB]">{Icon.bell(16)}<span className="absolute right-1 top-1 grid h-3.5 min-w-[14px] place-items-center rounded-full bg-danger-500 px-0.5 text-[8px] font-700 text-white">2</span></button>
+            <button onClick={() => setNotifOpen(true)} aria-label="Notifications" className="relative rounded-lg p-2 text-muted hover:bg-[#F9FAFB]">{Icon.bell(16)}{alerts.length > 0 && (<span className="absolute right-1 top-1 grid h-3.5 min-w-[14px] place-items-center rounded-full bg-danger-500 px-0.5 text-[8px] font-700 text-white">{alerts.length > 9 ? "9+" : alerts.length}</span>)}</button>
             <span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-100 text-[10px] font-600 text-indigo-700">{initials}</span>
           </div>
         </header>
@@ -70,7 +89,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <Drawer open={notifOpen} onClose={() => setNotifOpen(false)}>
         <div className="sticky top-0 border-b border-line bg-surface px-6 py-4"><h2 className="font-display text-[16px] font-600 text-heading">Notifications</h2></div>
-        <div className="bg-surface">{ALERTS.map((a, i) => (<div key={i} className="border-b border-line px-6 py-4"><div className="flex items-baseline justify-between gap-3"><span className="text-[13px] font-600 text-heading">{a.title}</span><span className="shrink-0 text-[10px] text-faint">{a.date}</span></div><p className="mt-1 text-tiny text-muted">{a.body}</p><p className="mt-1.5 text-micro text-indigo-700">{a.action}</p></div>))}</div>
+        <div className="bg-surface">
+          {!alertsLoaded ? (
+            <p className="px-6 py-5 text-tiny text-muted">Loading notifications...</p>
+          ) : alerts.length === 0 ? (
+            <p className="px-6 py-5 text-tiny text-muted">
+              No notifications. Deadline reminders and defaults appear here.
+            </p>
+          ) : alerts.map((a) => (
+            <div key={a.id} className="border-b border-line px-6 py-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-[13px] font-600 text-heading">{a.title}</span>
+                <span className="shrink-0 text-[10px] text-faint">
+                  {fmtDate(a.created_at.slice(0, 10))}
+                </span>
+              </div>
+              <p className="mt-1 text-tiny text-muted">{a.body}</p>
+              {a.category && (
+                <p className="mt-1.5 text-micro text-indigo-700">{a.category}</p>
+              )}
+            </div>
+          ))}
+        </div>
       </Drawer>
     </div>
   );

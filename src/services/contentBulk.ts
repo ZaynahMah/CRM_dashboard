@@ -211,27 +211,13 @@ export const pendingForContent = (campaigns: Campaign[]) =>
   campaigns.filter((c) =>
     c.content_status === "PENDING" || c.content_status === "NEEDS_CHANGES");
 
-export interface ContentChangeSummary {
-  campaign_id: string;
-  campaign_name: string;
-  changed_fields: string[];
-  changed_at: string;
-  change_count: number;
-}
-
-/** What Content changed that CRM has not yet acknowledged. */
-export async function contentChangesForReview(): Promise<ContentChangeSummary[]> {
-  const { data, error } = await supabase.rpc("content_changes_for_review");
-  if (error) {
-    if (/does not exist|schema cache/i.test(error.message)) return [];
-    throw error;
-  }
-  return (data ?? []) as ContentChangeSummary[];
-}
-
-/** CRM marks one campaign's changes as seen. */
-export async function acknowledgeContentChanges(campaignId: string) {
-  const { error } = await supabase
-    .rpc("acknowledge_content_changes", { p_campaign_id: campaignId });
-  if (error) throw error;
-}
+/*
+ * The CRM-facing "Changed Fields" panel was REMOVED at the product owner's
+ * request, along with `contentChangesForReview()` and
+ * `acknowledgeContentChanges()`, which existed only to serve it.
+ *
+ * The diff CAPTURE above is deliberately kept: `content_change_sets` is
+ * campaign edit history, written whenever Content imports or corrects copy.
+ * Nothing reads it today, but deleting the writes would discard an audit
+ * trail, and the brief was explicit about not removing underlying history.
+ */

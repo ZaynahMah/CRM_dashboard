@@ -50,7 +50,6 @@ src/components/CategorySlaTracker.tsx
 src/components/Charts.tsx
 src/components/ChartsAdvanced.tsx
 src/components/ContentBulkExcel.tsx
-src/components/ContentChangesForCrm.tsx
 src/components/ContentImportPreview.tsx
 src/components/CrmFlowBoard.tsx
 src/components/CrmFlowSection.tsx
@@ -91,6 +90,8 @@ src/lib/apiGuard.ts
 src/lib/bulkOutcomes.ts
 src/lib/businessWeeks.test.ts
 src/lib/businessWeeks.ts
+src/lib/campaignDate.test.ts
+src/lib/campaignDate.ts
 src/lib/categoryValidation.ts
 src/lib/columnMatch.ts
 src/lib/contentExcel.test.ts
@@ -105,6 +106,7 @@ src/lib/excelDates.ts
 src/lib/format.ts
 src/lib/monthlyWorkflow.ts
 src/lib/noTruncation.test.ts
+src/lib/p0Fixes.test.ts
 src/lib/paging.test.ts
 src/lib/paging.ts
 src/lib/performanceAnalysis.ts

@@ -22,6 +22,9 @@ import { ContentImportPreview } from "./ContentImportPreview";
  * CRM. Identity is carried by the campaign UUID in the sheet, and the
  * import refuses anything that lost or gained a row.
  */
+/** One definition, used by both the inline panel and the export guard. */
+const NO_MATCHES = "No campaigns found for selected date range.";
+
 export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
   /** The Content team's assigned rows, in their existing order. */
   campaigns: Campaign[];
@@ -78,7 +81,7 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
     if (slice.length === 0) {
       setErrors([mode === "pending"
         ? "You have no pending rows — everything assigned to you has been submitted."
-        : "No campaigns found for selected date range."]);
+        : NO_MATCHES]);
       return;
     }
     setBusy("export");
@@ -236,9 +239,7 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
               </dl>
             )}
             {rangeCheck.valid && summary.count === 0 && (
-              <p className="mt-2 text-tiny text-danger-700">
-                No campaigns found for selected date range.
-              </p>
+              <p className="mt-2 text-tiny text-danger-700">{NO_MATCHES}</p>
             )}
           </div>
         )}
@@ -270,39 +271,6 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
             </>
           )}
         </div>
-
-        {mode === "dates" && (
-          <div className="mt-3 rounded-lg border border-line px-4 py-3">
-            {!rangeCheck.valid ? (
-              <p className="text-tiny text-danger-700">{rangeCheck.error}</p>
-            ) : (
-              <dl className="flex flex-wrap gap-x-8 gap-y-2">
-                <div>
-                  <dt className="text-micro uppercase tracking-wide text-faint">Date Range</dt>
-                  <dd className="text-tiny font-medium text-heading">{summary.label}</dd>
-                </div>
-                <div>
-                  <dt className="text-micro uppercase tracking-wide text-faint">Campaigns Found</dt>
-                  <dd className={`text-tiny font-medium tabular-nums ${
-                    summary.count === 0 ? "text-danger-700" : "text-heading"}`}>
-                    {summary.count}
-                  </dd>
-                </div>
-                <div className="min-w-0">
-                  <dt className="text-micro uppercase tracking-wide text-faint">Categories</dt>
-                  <dd className="text-tiny text-body">
-                    {summary.categories.length > 0 ? summary.categories.join(", ") : "—"}
-                  </dd>
-                </div>
-              </dl>
-            )}
-            {rangeCheck.valid && summary.count === 0 && (
-              <p className="mt-2 text-tiny text-danger-700">
-                No campaigns found for selected date range.
-              </p>
-            )}
-          </div>
-        )}
 
         {batchLocked && (
           <div className="mt-3 rounded-lg bg-warning-50 px-3 py-2.5 text-tiny text-warning-700">

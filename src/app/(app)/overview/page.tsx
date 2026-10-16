@@ -14,7 +14,6 @@ import { WeekDeadlines } from "@/components/WeekDeadlines";
 import { CrmFlowBoard } from "@/components/CrmFlowBoard";
 import { RoleQueue } from "@/components/RoleQueue";
 import { ContentBulkExcel } from "@/components/ContentBulkExcel";
-import { ContentChangesForCrm } from "@/components/ContentChangesForCrm";
 import { CrmInputUpload } from "@/components/CrmInputUpload";
 import { SplitBar } from "@/components/Charts";
 import { Icon } from "@/components/icons";
@@ -135,9 +134,6 @@ export default function OverviewPage() {
               {Icon.chart(13)} Download Excel
             </Button>
           </div>
-
-          {/* NEW: what Content changed, so CRM need not open every row. */}
-          <ContentChangesForCrm onChanged={reloadAll} />
 
           <CrmFlowBoard campaigns={campaigns} qc={qc} profileId={profile.id}
             onChanged={reloadAll} onOpen={setOpen}

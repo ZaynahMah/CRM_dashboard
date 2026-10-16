@@ -3,8 +3,9 @@
 import { useMemo } from "react";
 import type { Campaign } from "@/types/campaign";
 import { Pill } from "./ui";
-import { fmtDate, isoDate, toDate, today } from "@/lib/format";
+import { fmtDate, isoDate, toDate } from "@/lib/format";
 import { categoryDeadlineForWeek } from "@/lib/businessWeeks";
+import { inWeek, inMonth, dedupeById } from "@/lib/campaignDate";
 
 interface WeekBlock {
   weekLabel: string;
@@ -15,13 +16,39 @@ interface WeekBlock {
   status: "Completed" | "In Progress" | "Pending";
 }
 
+/**
+ * Category submission deadlines.
+ *
+ * SOURCE OF TRUTH: `campaigns` comes from `useCampaigns()` -> `listCampaigns()`,
+ * which reads the `campaigns` table in full (paged past the 1,000-row API
+ * cap). These are real CRM input rows — not a sheet, not an upload record.
+ *
+ * A row counts for a week when ITS CAMPAIGN DATE (`launch_date`) falls
+ * inside that week. Nothing else is accepted as evidence of submission: not
+ * a file-modified date, not an upload timestamp, not `updated_at`, not
+ * `submitted_at`, not the deadline, and not the current date.
+ */
 export function WeekDeadlines({ campaigns, monthStart }: {
   campaigns: Campaign[];
   monthStart: Date;
 }) {
   const weeks = useMemo(() => {
-    const t = today();
     const blocks: WeekBlock[] = [];
+    // The same campaign can arrive from several imports; counting it twice
+    // inflates every total below.
+    const rows = dedupeById(campaigns);
+
+    /**
+     * ONGOING-MONTH GATE. Rows whose campaign date falls in the month being
+     * shown. The week ranges below already confine results to this month,
+     * so this is a belt-and-braces guard — and it makes the rule explicit
+     * rather than incidental, which is what let the old bug hide.
+     *
+     * `monthStart` is passed in from the system clock, so this rolls into
+     * November, December and January with no change.
+     */
+    const monthRows = inMonth(rows, monthStart);
+    const monthHasData = monthRows.length > 0;
     const year = monthStart.getFullYear();
     const month = monthStart.getMonth();
     const lastDay = new Date(year, month + 1, 0).getDate();
@@ -38,15 +65,58 @@ export function WeekDeadlines({ campaigns, monthStart }: {
 
       const wsIso = isoDate(ws);
       const weIso = isoDate(we);
-      const weekCampaigns = campaigns.filter((c) => c.launch_date >= wsIso && c.launch_date <= weIso);
+      // Scoped by CAMPAIGN DATE (launch_date) — never by updated_at, a
+      // review timestamp, an upload time or the deadline.
+      const weekCampaigns = inWeek(monthRows, wsIso, weIso);
 
+      /**
+       * PRE-EXISTING definition, deliberately unchanged: a campaign counts
+       * as filled when Brand and Offer are both present.
+       *
+       * Worth knowing: the app holds THREE different notions of a Category
+       * submission being complete, and they disagree —
+       *   here                      brand && offer                (2 fields)
+       *   lib/categoryValidation    CATEGORY_REQUIRED             (6 fields)
+       *   migration 24 SLA          category_status in LOCKED/SUBMITTED
+       * This is the loosest of the three. It is kept as-is because changing
+       * it would change every number in this table, which is a product
+       * decision, not a bug fix.
+       */
       const filled = weekCampaigns.filter((c) => c.brand && c.offer).length;
       const total = weekCampaigns.length;
 
+      /**
+       * Status depends on ACTUAL CAMPAIGN RECORDS, not on the calendar.
+       *
+       * The bug this replaces was `else if (deadline < t) status = "In
+       * Progress"`, which made every week with a passed deadline look
+       * active even with zero campaigns — producing the impossible
+       * "0 campaigns · 0 / 0 · In Progress".
+       *
+       * A deadline says when input was DUE. Only a campaign row proves work
+       * EXISTS. The two are separate concepts and the first must never
+       * stand in for the second.
+       */
+      /**
+       * The status invariant:
+       *   total === 0                  -> Pending
+       *   total > 0 && filled < total  -> In Progress
+       *   total > 0 && filled === total-> Completed
+       *
+       * `filled` and the Completed mapping are BOTH pre-existing product
+       * rules, carried over unchanged. See the note above `filled`.
+       */
       let status: WeekBlock["status"] = "Pending";
-      if (total > 0 && filled === total) status = "Completed";
-      else if (filled > 0) status = "In Progress";
-      else if (deadline < t) status = "In Progress"; // past deadline
+      // Explicit guards, in the order the rules were stated.
+      if (!monthHasData) {
+        status = "Pending";              // no current-month input at all
+      } else if (total === 0) {
+        status = "Pending";              // nothing for THIS week
+      } else if (filled < total) {
+        status = "In Progress";
+      } else {
+        status = "Completed";
+      }
 
       blocks.push({
         weekLabel: `${fmtDate(wsIso)} – ${fmtDate(weIso)}`,
