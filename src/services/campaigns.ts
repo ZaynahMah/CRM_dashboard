@@ -5,7 +5,9 @@ import type {
   ActivityLog, Campaign, ChangeRequest, ContentSubmission, CrmDecision, QcChecklist,
 } from "@/types/campaign";
 import { qcComplete, missingQcFields } from "@/lib/workflow";
-import { trackingCheck, suggestTrackingFields } from "@/lib/trackingCode";
+import {
+  trackingCheck, suggestTrackingFields, buildTrackingCode, buildLandingPlusTracking,
+} from "@/lib/trackingCode";
 
 const TABLE = "campaigns";
 
@@ -209,10 +211,82 @@ export async function saveQc(campaignId: string, patch: Partial<QcChecklist>) {
  * Final View and the Calendar page both read calendar_status = 'UPDATED'
  * exclusively; nothing appears there any other way.
  */
-export async function updateCalendar(campaign: Campaign, userId: string) {
+/**
+ * Finalizes one campaign: the explicit step after Final QC that makes a PN
+ * appear in Final View and the Calendar.
+ *
+ * The write happens server-side in `update_calendar()`, which re-reads the
+ * campaign inside the transaction and re-checks QC, the tracking code and
+ * its `cid=` format. The client cannot talk it past those gates.
+ *
+ * IDEMPOTENT by construction: there is no separate calendar table. Final
+ * View and the Calendar both read `campaigns where calendar_status =
+ * 'UPDATED'`, so finalizing twice sets the same row to the same state and
+ * cannot produce a duplicate entry. Returning the refreshed row lets the
+ * caller confirm the write landed rather than assuming it.
+ */
+export async function updateCalendar(campaign: Campaign, userId: string): Promise<Campaign> {
+  const before = {
+    campaignId: campaign.id,
+    previousStatus: campaign.calendar_status,
+    qcStatus: campaign.qc_status,
+    hasTrackingCode: Boolean((campaign.tracking_code ?? "").trim()),
+  };
+
+  // Already finalized: return the stored record instead of writing again.
+  if (campaign.calendar_status === "UPDATED") {
+    const { data, error } = await supabase
+      .from(TABLE).select("*").eq("id", campaign.id).single();
+    if (error) throw error;
+    console.info("[updateCalendar] already finalized", before);
+    return data as Campaign;
+  }
+
   const { error } = await supabase.rpc("update_calendar", { p_campaign_id: campaign.id });
-  if (error) throw error;
-  await log(campaign.id, userId, "CALENDAR_UPDATED", "CRM added this campaign to the finalized calendar.");
+  if (error) {
+    console.error("[updateCalendar] rejected", { ...before, error: error.message });
+    throw error;
+  }
+
+  // Read the row BACK so success is proven, not assumed.
+  const { data, error: readErr } = await supabase
+    .from(TABLE).select("*").eq("id", campaign.id).single();
+  if (readErr) throw readErr;
+  const after = data as Campaign;
+
+  if (after.calendar_status !== "UPDATED") {
+    throw new Error(
+      "The calendar update did not take effect. The campaign has not been finalized.");
+  }
+
+  await log(campaign.id, userId, "CALENDAR_UPDATED",
+    "CRM added this campaign to the finalized calendar.");
+  console.info("[updateCalendar] finalized", { ...before, finalStatus: after.calendar_status });
+  return after;
+}
+
+/**
+ * Builds the tracking code from the campaign's own fields and PERSISTS it.
+ *
+ * This existed only in the bulk workspace, so a CRM user working in the
+ * drawer had no way to produce one — they filled everything, saw green, and
+ * `update_calendar()` then refused the row for an empty tracking code with
+ * no visible reason. Same generator, same `cid=` format, same masters.
+ */
+export async function generateTrackingCode(campaign: Campaign): Promise<Campaign> {
+  const fields = suggestTrackingFields(campaign);
+  const { code, valid, missing } = buildTrackingCode(fields);
+  if (!valid) {
+    throw new Error(
+      `Tracking Code could not be generated because ${missing.join(", ")} `
+      + `${missing.length === 1 ? "is" : "are"} missing.`);
+  }
+  const landing = buildLandingPlusTracking(campaign.landing, code);
+  return updateCampaign(campaign.id, {
+    tracking_code: code,
+    landing_plus_tracking: landing.url || null,
+    tracking_code_check: trackingCheck(fields).label,
+  });
 }
 
 /**

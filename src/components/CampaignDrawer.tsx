@@ -21,7 +21,6 @@ import {
 } from "@/lib/categoryValidation";
 import { Button, Card, Drawer, Field, Modal, Pill } from "./ui";
 import { SearchSelect } from "./SearchSelect";
-import { RecommendationPanel } from "./RecommendationPanel";
 import { Icon } from "./icons";
 import masterData from "@/data/masterData.json";
 
@@ -38,6 +37,12 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   const [qc, setQc] = useState<QcChecklist | null>(null);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [pushOpen, setPushOpen] = useState(false);
+  /** Shown inside the modal when the backend refuses the finalization. */
+  const [pushError, setPushError] = useState<string | null>(null);
+  /** Visible confirmation that the write actually landed. */
+  const [pushDone, setPushDone] = useState<string | null>(null);
+  const [genBusy, setGenBusy] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [changeReason, setChangeReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -77,6 +82,16 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   const creativeNeeded = creativeRequired(campaign);
   // #2: the drawer must enforce the tracking code exactly as Bulk Push does.
   const tracking = trackingCheck(suggestTrackingFields(campaign));
+  /**
+   * The PERSISTED code, not merely "the fields look complete".
+   *
+   * The check above validates the input fields. A green state was shown
+   * while `tracking_code` in the database was still null, which is exactly
+   * what let a user reach Update Calendar and be refused.
+   */
+  const hasPersistedCode =
+    Boolean((campaign.tracking_code ?? "").trim())
+    && (campaign.tracking_code ?? "").startsWith("cid=");
 
   const save = async (patch: Partial<Campaign>) => {
     await api.updateCampaign(campaign.id, patch);
@@ -184,13 +199,6 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
             ]} />
           )}
         </Block>
-
-        {/* ── RECOMMENDATION — the one authoritative implementation, appears
-             specifically once Category has submitted, CRM-only, decision
-             support only (it never changes any status itself). ── */}
-        {hasCategoryInput && campaign.category_status === "LOCKED" && (
-          <RecommendationPanel campaign={campaign} role={role} />
-        )}
 
         {/* ── CRM REVIEW DECISION — the real gate between Category input and
              CRM completing its own fields. Nothing below this unlocks until
@@ -341,8 +349,12 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
                 onBlur={(e) => save({ cid: e.target.value })} /></Field>
               <Field label="Campaign ID"><input defaultValue={campaign.campaign_id_ext ?? ""}
                 onBlur={(e) => save({ campaign_id_ext: e.target.value })} /></Field>
-              <Field label="Tracking Code"><input defaultValue={campaign.tracking_code ?? ""}
-                onBlur={(e) => save({ tracking_code: e.target.value })} /></Field>
+              <Field label="Tracking Code"
+                hint={hasPersistedCode ? "" : "not generated yet"}>
+                <input value={campaign.tracking_code ?? ""} readOnly
+                  placeholder="Press Generate once the fields below are filled"
+                  className={hasPersistedCode ? "" : "!border-[#FECDCA]"} />
+              </Field>
               <Field label="Collapse ID"><input defaultValue={campaign.collapse ?? campaign.collapse_id ?? ""}
                 onBlur={(e) => save({ collapse: e.target.value })} /></Field>
               {/* Group ID is ALSO written by the campaigns_sync_group trigger
@@ -381,13 +393,32 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
             </div>
 
             <div className="mt-4 flex flex-wrap gap-3">
-              <Button size="sm" disabled={!qcPassed || !tracking.ok} onClick={() => logAndSave(
+              <Button size="sm" disabled={!qcPassed || !tracking.ok || !hasPersistedCode} onClick={() => logAndSave(
                 { qc_status: "PASSED" },
                 "FINAL_QC_COMPLETED", "CRM completed final QC.")}>
                 {Icon.check(13)} Mark QC Complete
               </Button>
-              <Button size="sm" variant="ghost" disabled={campaign.qc_status !== "PASSED" || campaign.calendar_status === "UPDATED"}
-                onClick={() => setPushOpen(true)}>
+              {/* Generating lives here because the drawer previously had no
+                  way to produce a code at all — the field was free text and
+                  update_calendar() then refused the row. */}
+              <Button size="sm" variant="ghost" disabled={genBusy}
+                onClick={async () => {
+                  setGenBusy(true); setGenError(null);
+                  try {
+                    await api.generateTrackingCode(campaign);
+                    await refresh();
+                  } catch (e) {
+                    setGenError(e instanceof Error ? e.message : String(e));
+                  }
+                  setGenBusy(false);
+                }}>
+                {genBusy ? "Generating..." : hasPersistedCode ? "Regenerate Tracking Code" : "Generate Tracking Code"}
+              </Button>
+              <Button size="sm" variant="ghost"
+                disabled={campaign.qc_status !== "PASSED"
+                  || campaign.calendar_status === "UPDATED"
+                  || !hasPersistedCode}
+                onClick={() => { setPushError(null); setPushOpen(true); }}>
                 Update Calendar
               </Button>
               {campaign.calendar_status === "UPDATED" && (
@@ -401,6 +432,18 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
             )}
             {!tracking.ok && (
               <p className="mt-1 text-micro text-danger-700">{tracking.label} — {tracking.detail}</p>
+            )}
+            {tracking.ok && !hasPersistedCode && (
+              <p className="mt-1 text-micro text-danger-700">
+                Every tracking field is filled, but no Tracking Code has been generated yet.
+                Press Generate Tracking Code before Final QC.
+              </p>
+            )}
+            {genError && <p className="mt-1 text-micro text-danger-700">{genError}</p>}
+            {pushDone && (
+              <p className="mt-1 flex items-center gap-1.5 text-micro text-success-700">
+                {Icon.check(12)} {pushDone}
+              </p>
             )}
             {!creativeNeeded && (
               <p className="mt-1 text-micro text-faint">Creative verified: {QC_NA_LABEL}.</p>
@@ -426,15 +469,51 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
       </div>
 
       <Modal open={pushOpen} onClose={() => setPushOpen(false)} title="Update calendar?"
-        sub="This is the explicit finalization step — the campaign only appears in Final View / Calendar after this.">
+        sub="This is the finalization step. The campaign will appear in Final View and the Calendar after confirmation.">
         <p className="text-tiny text-muted">Final QC has passed for this campaign. Confirm to add it to the finalized calendar.</p>
+        {pushError && (
+          <p className="mt-3 rounded-lg bg-danger-50 px-3 py-2 text-tiny text-danger-700">
+            {pushError}
+          </p>
+        )}
+
         <div className="mt-4 flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setPushOpen(false)}>Cancel</Button>
+          <Button variant="ghost" disabled={busy} onClick={() => {
+            // Cancel changes nothing.
+            setPushError(null); setPushOpen(false);
+          }}>Cancel</Button>
           <Button disabled={busy} onClick={async () => {
-            setBusy(true);
-            await api.updateCalendar(campaign, profile.id);
-            setBusy(false); setPushOpen(false); await refresh();
-          }}>Update Calendar</Button>
+            /**
+             * This had NO try/catch. `update_calendar()` raises when QC has
+             * not passed or the tracking code is empty or not `cid=`; the
+             * promise rejected, `setBusy(false)` and `setPushOpen(false)`
+             * never ran, and nothing was shown. The modal simply sat there
+             * — "I click Update Calendar and it won't update".
+             *
+             * The modal now closes ONLY after the database confirms the
+             * write, and any refusal is shown with its reason.
+             */
+            setBusy(true); setPushError(null);
+            try {
+              await api.updateCalendar(campaign, profile.id);
+              setPushOpen(false);
+              setPushDone("Campaign added to the finalized calendar.");
+              // Refresh so Final View and the Calendar show it without a
+              // hard reload. A failure here does not un-finalize anything,
+              // so it is reported separately.
+              try {
+                await refresh();
+              } catch {
+                setPushError(
+                  "Campaign was finalized, but the Calendar refresh failed. Refreshing data.");
+              }
+            } catch (e) {
+              setPushError(`Unable to update the calendar: ${
+                e instanceof Error ? e.message : String(e)}`);
+            } finally {
+              setBusy(false);
+            }
+          }}>{busy ? "Updating..." : "Update Calendar"}</Button>
         </div>
       </Modal>
 
