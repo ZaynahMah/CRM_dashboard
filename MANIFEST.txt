@@ -19,6 +19,7 @@ scripts/db-qc-scenarios.sql
 scripts/db-qc-sla.sql
 scripts/db-qc-streams.sql
 scripts/db-qc.sh
+scripts/fix-stale-deletions.sh
 scripts/pg-bootstrap.sql
 scripts/static-qc.sh
 scripts/verify-package.sh
@@ -66,7 +67,6 @@ src/components/PerformanceReportMeta.tsx
 src/components/PerformanceUpload.tsx
 src/components/PnTypeSection.tsx
 src/components/ProgressBar.tsx
-src/components/RecommendationPanel.tsx
 src/components/RoleQueue.tsx
 src/components/SearchSelect.tsx
 src/components/SessionProvider.tsx
@@ -93,6 +93,7 @@ src/lib/businessWeeks.ts
 src/lib/campaignDate.test.ts
 src/lib/campaignDate.ts
 src/lib/categoryValidation.ts
+src/lib/categoryWeekQueue.test.ts
 src/lib/columnMatch.ts
 src/lib/contentExcel.test.ts
 src/lib/contentExcel.ts
@@ -103,6 +104,7 @@ src/lib/dateRange.ts
 src/lib/deadlines.ts
 src/lib/e2e.test.ts
 src/lib/excelDates.ts
+src/lib/finalizeCalendar.test.ts
 src/lib/format.ts
 src/lib/monthlyWorkflow.ts
 src/lib/noTruncation.test.ts
@@ -120,9 +122,11 @@ src/lib/teamSla.test.ts
 src/lib/teamSla.ts
 src/lib/trackingCode.test.ts
 src/lib/trackingCode.ts
+src/lib/trackingFields.ts
 src/lib/trackingMasters.ts
 src/lib/uploadReset.test.ts
 src/lib/uploadReset.ts
+src/lib/uxCleanup.test.ts
 src/lib/workflow.ts
 src/middleware.ts
 src/services/auth.ts

@@ -10,11 +10,8 @@ import {
   HEADER_LIMIT, SUB_COPY_LIMIT,
 } from "@/lib/workflow";
 import { trackingCheck, suggestTrackingFields } from "@/lib/trackingCode";
-import {
-  CAMPAIGN_TYPE_PN, CAMPAIGN_NAME_PRP, CHANNEL_NAME_PUSH, CHANNEL_FORMATS,
-  SEGMENT_1_VALUES, SEGMENT_2_VALUES, SEGMENT_2_LABELS, CATEGORY_VALUES,
-  SUB_CATEGORY_VALUES, LANDING_VALUES, OFFER_VALUES, KEYWORD_VALUES,
-} from "@/lib/trackingMasters";
+import { CHANNEL_FORMATS, LANDING_VALUES } from "@/lib/trackingMasters";
+import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 import {
   categoryErrors, draftFromCampaign, draftIsLockable, draftIsSavable, draftToPatch,
   isDateTimeLocal, legacyDateTimeNote, type CategoryDraft,
@@ -301,54 +298,38 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
                 onChange={(e) => save({ sound: e.target.value === "Yes" })}><option>No</option><option>Yes</option></select></Field>
               <Field label="GL"><select defaultValue={campaign.global_limit ? "Yes" : "No"}
                 onChange={(e) => save({ global_limit: e.target.value === "Yes" })}><option>No</option><option>Yes</option></select></Field>
-              {/* Tracking fields are dropdowns here exactly as in the Show All
-                  PN workspace, and read the same master lists. They were
-                  free-text inputs, which let values like "Image" be typed
-                  where the code needs "img". */}
-              <Field label="Campaign Type" hint="Fixed">
-                <select value={campaign.campaign_type ?? CAMPAIGN_TYPE_PN}
-                  onChange={(e) => save({ campaign_type: e.target.value })}>
-                  <option value={CAMPAIGN_TYPE_PN}>{CAMPAIGN_TYPE_PN}</option>
-                </select>
+              {/* Entry method comes from lib/trackingFields.ts, shared with
+                  Show All PN. Composition is unchanged. */}
+              <Field label="Campaign Type" hint="fixed">
+                <input readOnly value={FIXED_TRACKING_VALUES.campaign_type} />
               </Field>
-              <Field label="Campaign Name (code)" hint="Fixed">
-                <select value={campaign.campaign_name_code ?? CAMPAIGN_NAME_PRP}
-                  onChange={(e) => save({ campaign_name_code: e.target.value })}>
-                  <option value={CAMPAIGN_NAME_PRP}>{CAMPAIGN_NAME_PRP}</option>
-                </select>
+              <Field label="Campaign Name" hint="fixed">
+                <input readOnly value={FIXED_TRACKING_VALUES.campaign_name_code} />
               </Field>
-              <Field label="Channel Name" hint="Fixed">
-                <select value={campaign.channel_name ?? CHANNEL_NAME_PUSH}
-                  onChange={(e) => save({ channel_name: e.target.value })}>
-                  <option value={CHANNEL_NAME_PUSH}>{CHANNEL_NAME_PUSH}</option>
-                </select>
+              <Field label="Channel Name" hint="fixed">
+                <input readOnly value={FIXED_TRACKING_VALUES.channel_name} />
               </Field>
               <TrackingSelect label="Channel Format" value={campaign.channel_format}
                 options={CHANNEL_FORMATS} onPick={(v) => save({ channel_format: v })} />
-              <TrackingSelect label="Segment 1" value={campaign.segment_1}
-                options={SEGMENT_1_VALUES} onPick={(v) => save({ segment_1: v })} />
-              <TrackingSelect label="Segment 2" value={campaign.segment_2}
-                options={SEGMENT_2_VALUES} labels={SEGMENT_2_LABELS}
-                onPick={(v) => save({ segment_2: v })} />
-              <TrackingSelect label="Category (code)" value={campaign.tracking_category}
-                options={CATEGORY_VALUES} onPick={(v) => save({ tracking_category: v })} />
-              <TrackingSelect label="Sub Category (code)" value={campaign.tracking_sub_category}
-                options={SUB_CATEGORY_VALUES} onPick={(v) => save({ tracking_sub_category: v })} />
+              <Field label="Segment 1"><input defaultValue={campaign.segment_1 ?? ""}
+                onBlur={(e) => save({ segment_1: e.target.value.trim() })} /></Field>
+              <Field label="Segment 2"><input defaultValue={campaign.segment_2 ?? ""}
+                onBlur={(e) => save({ segment_2: e.target.value.trim() })} /></Field>
+              <Field label="Category (code)"><input defaultValue={campaign.tracking_category ?? ""}
+                onBlur={(e) => save({ tracking_category: e.target.value.trim() })} /></Field>
+              <Field label="Sub Category (code)"><input defaultValue={campaign.tracking_sub_category ?? ""}
+                onBlur={(e) => save({ tracking_sub_category: e.target.value.trim() })} /></Field>
               <Field label="Brand (code)"><input defaultValue={campaign.tracking_brand ?? ""}
-                onBlur={(e) => save({ tracking_brand: e.target.value })} /></Field>
+                onBlur={(e) => save({ tracking_brand: e.target.value.trim() })} /></Field>
               <TrackingSelect label="Landing (code)" value={campaign.tracking_landing}
                 options={LANDING_VALUES} onPick={(v) => save({ tracking_landing: v })} />
-              <TrackingSelect label="Offer (code)" value={campaign.tracking_offer}
-                options={OFFER_VALUES} onPick={(v) => save({ tracking_offer: v })} />
-              <TrackingSelect label="Keywords" value={campaign.keywords}
-                options={KEYWORD_VALUES} onPick={(v) => save({ keywords: v })} />
+              <Field label="Offer (code)"><input defaultValue={campaign.tracking_offer ?? ""}
+                onBlur={(e) => save({ tracking_offer: e.target.value.trim() })} /></Field>
+              <Field label="Keywords"><input defaultValue={campaign.keywords ?? ""}
+                onBlur={(e) => save({ keywords: e.target.value.trim() })} /></Field>
               <Field label="Tracking Code check" hint={tracking.ok ? "" : tracking.detail}>
                 <input readOnly disabled value={tracking.label} />
               </Field>
-              <Field label="CID"><input defaultValue={campaign.cid ?? ""}
-                onBlur={(e) => save({ cid: e.target.value })} /></Field>
-              <Field label="Campaign ID"><input defaultValue={campaign.campaign_id_ext ?? ""}
-                onBlur={(e) => save({ campaign_id_ext: e.target.value })} /></Field>
               <Field label="Tracking Code"
                 hint={hasPersistedCode ? "" : "not generated yet"}>
                 <input value={campaign.tracking_code ?? ""} readOnly
@@ -622,14 +603,17 @@ function CategoryForm({ campaign, profileId, onSaved }: {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-2">
+        {/* Free text everywhere Category input is edited. */}
         <Field label="Sub Category">
-          <SearchSelect portal value={v.sub_category} onChange={(val) => setV((p) => ({ ...p, sub_category: val }))}
-            options={SUB_CATEGORIES} placeholder="Select sub category" />
+          <input value={v.sub_category ?? ""}
+            onChange={(e) => setV((p) => ({ ...p, sub_category: e.target.value }))}
+            placeholder="Type a sub category" />
         </Field>
         <Field label="Brand" required
           hint={showErrors ? errors.brand : undefined} error={Boolean(showErrors && errors.brand)}>
-          <SearchSelect portal allowCreate value={v.brand} onChange={(val) => setV((p) => ({ ...p, brand: val }))}
-            options={masterData.brands} placeholder="Search or add a brand" />
+          <input value={v.brand ?? ""}
+            onChange={(e) => setV((p) => ({ ...p, brand: e.target.value }))}
+            placeholder="Type a brand, or several" />
         </Field>
         {/* Free text by request: the offer wording changes per campaign and
             the fixed list was rejecting legitimate values. */}

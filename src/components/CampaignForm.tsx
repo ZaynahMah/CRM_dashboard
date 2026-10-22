@@ -78,11 +78,10 @@ export function CampaignForm({ mode, slot, onSubmit, onCancel }: {
             {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
           </select>
         </Field>
+        {/* Free text: the master list was blocking legitimate values. */}
         <Field label="Sub-category" required>
-          <select value={v.sub_category ?? ""} onChange={set("sub_category")} disabled={!v.category}>
-            <option value="">{v.category ? "Select a sub-category" : "Choose a category first"}</option>
-            {(SUB_CATEGORIES[v.category ?? ""] ?? []).map((s) => <option key={s}>{s}</option>)}
-          </select>
+          <input value={v.sub_category ?? ""} onChange={set("sub_category")}
+            placeholder="Type a sub-category" />
         </Field>
         <Field label="Campaign type" required>
           <select value={v.campaign_type ?? ""} onChange={set("campaign_type")}>

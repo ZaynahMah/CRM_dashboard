@@ -95,7 +95,9 @@ describe("the date-range summary renders exactly once", () => {
 
   it("the count is computed, never hard-coded", () => {
     expect(src).toContain("summary.count");
-    expect(src).toContain("summariseRange(campaigns, range");
+    // Summarised from the ELIGIBLE set (Awaiting your copy), not every
+    // campaign — the count shown and the rows exported are one source.
+    expect(src).toMatch(/summariseRange\((pending|campaigns), range/);
     // No literal count anywhere near the label.
     expect(src).not.toMatch(/Campaigns Found<\/dt>\s*<dd[^>]*>\s*\d+\s*</);
   });

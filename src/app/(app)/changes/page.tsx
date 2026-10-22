@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
-import { approveChange, listChangeRequests, listCampaigns, rejectChange } from "@/services/campaigns";
+import {
+  approveChange, listChangeRequests, listCampaigns, rejectChange,
+  notifyChangeRequestsUpdated,
+} from "@/services/campaigns";
 import type { Campaign, ChangeRequest } from "@/types/campaign";
 import { Button, Card, Empty, Pill, PageHead } from "@/components/ui";
 import { fmtRelative, titleCase } from "@/lib/format";
@@ -78,7 +81,11 @@ export default function ChangesPage() {
                         onClick={async () => {
                           setBusy(r.id);
                           await approveChange(r, profile.id);
-                          await load(); setBusy(null);
+                          await load();
+                          // Drops the nav badge immediately, rather than on
+                          // the next navigation.
+                          notifyChangeRequestsUpdated();
+                          setBusy(null);
                         }}>
                         Approve &amp; update
                       </Button>
@@ -87,7 +94,9 @@ export default function ChangesPage() {
                         onClick={async () => {
                           setBusy(r.id);
                           await rejectChange(r, profile.id);
-                          await load(); setBusy(null);
+                          await load();
+                          notifyChangeRequestsUpdated();
+                          setBusy(null);
                         }}>
                         Reject
                       </Button>

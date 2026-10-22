@@ -57,7 +57,9 @@ export function ContentBulkExcel({ campaigns, profileId, onChanged }: {
   const rangeCheck = validateRange(range);
   // Everything the modal shows before the download: count, categories and
   // the range in words, so Content can confirm the batch is the right one.
-  const summary = summariseRange(campaigns, range,
+  // Summarised over the ELIGIBLE set, not every campaign: the count shown
+  // and the rows exported must come from one source of truth.
+  const summary = summariseRange(pending, range,
     (c) => c.launch_date, (c) => c.category ?? c.pncc_category_code);
   const slice = mode === "pending" ? pending : summary.items;
   const rangeLabel = mode === "pending" ? "pending rows" : summary.label;

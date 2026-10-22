@@ -515,3 +515,43 @@ export async function saveContentRow(
     reference_link: fields.reference_link.trim() || null,
   } as Partial<Campaign>);
 }
+
+
+/**
+ * How many change requests are waiting on CRM.
+ *
+ * Reads the SAME table and the SAME status the Changes page uses
+ * (`change_requests.status === 'PENDING'`), so the badge and the page can
+ * never disagree. Resolved, approved and rejected requests are not counted.
+ *
+ * Returns 0 rather than throwing: a missing count must never stop the
+ * navigation rendering.
+ */
+export async function pendingChangeRequestCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from("change_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "PENDING");
+  if (error) return 0;
+  return count ?? 0;
+}
+
+
+/**
+ * Lets the Changes page tell the shell that a request was just accepted or
+ * rejected, so the nav badge updates immediately instead of waiting for the
+ * next navigation.
+ *
+ * A tiny module-level subscription rather than a context: the shell and the
+ * page are not in the same tree, and this carries no data — only "recount".
+ */
+const changeRequestListeners = new Set<() => void>();
+
+export function onChangeRequestsUpdated(fn: () => void) {
+  changeRequestListeners.add(fn);
+  return () => { changeRequestListeners.delete(fn); };
+}
+
+export function notifyChangeRequestsUpdated() {
+  changeRequestListeners.forEach((fn) => fn());
+}

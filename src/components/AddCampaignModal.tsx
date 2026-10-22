@@ -173,7 +173,8 @@ export function AddCampaignModal({ open, onClose, profileId, isCrm, isUrgent = f
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Sub Category"><input value={subCategory} onChange={(e) => setSubCategory(e.target.value)} /></Field>
-            <Field label="Brand"><SearchSelect value={brand} onChange={setBrand} options={masterData.brands} placeholder="Search brands" /></Field>
+            <Field label="Brand"><input value={brand} onChange={(e) => setBrand(e.target.value)}
+              placeholder="Type a brand, or several" /></Field>
             <Field label="Offer"><SearchSelect value={offer} onChange={setOffer} options={masterData.offers} placeholder="Search offers" /></Field>
             <Field label="Landing Link"><input value={landing} onChange={(e) => setLanding(e.target.value)} /></Field>
             <Field label="Expected CVR"><input value={expectedCvr} onChange={(e) => setExpectedCvr(e.target.value)} placeholder="e.g. 2.5%" /></Field>

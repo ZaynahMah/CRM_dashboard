@@ -14,11 +14,8 @@ import { Icon } from "./icons";
 import { markRowDirty, isRowDirty, onDashboardReset } from "./useCampaigns";
 import { SearchSelect } from "./SearchSelect";
 import masterData from "@/data/masterData.json";
-import {
-  CAMPAIGN_TYPE_PN, CAMPAIGN_NAME_PRP, CHANNEL_NAME_PUSH, CHANNEL_FORMATS,
-  SEGMENT_1_VALUES, SEGMENT_2_VALUES, SEGMENT_2_LABELS, CATEGORY_VALUES, SUB_CATEGORY_VALUES,
-  LANDING_VALUES, OFFER_VALUES, KEYWORD_VALUES,
-} from "@/lib/trackingMasters";
+import { CHANNEL_FORMATS, LANDING_VALUES } from "@/lib/trackingMasters";
+import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 
 /**
  * The bulk operations workspace: every PN as a row, every field as a column,
@@ -85,7 +82,9 @@ interface ColumnDef {
 const CATEGORY_INPUT_COLUMNS: ColumnDef[] = [
   { key: "campaign_name", label: "Campaign Name", width: 190, type: "readonly" },
   { key: "sub_category", label: "Sub Category", width: 140 },
-  { key: "brand", label: "Brand", width: 150, type: "brand" },
+  // Free text, not a brand picker: Category must be able to type any value,
+  // including several brands in one cell ("Nike, Adidas, Puma").
+  { key: "brand", label: "Brand", width: 150 },
   { key: "offer", label: "Offer", width: 160 },
   { key: "brief", label: "Brief", width: 220 },
   { key: "landing", label: "Landing", width: 200 },
@@ -120,7 +119,9 @@ const CONTENT_INPUT_COLUMNS: ColumnDef[] = [
 const CATEGORY_COLUMNS: ColumnDef[] = [
   { key: "campaign_name", label: "Campaign Name", width: 190 },
   { key: "sub_category", label: "Sub Category", width: 140 },
-  { key: "brand", label: "Brand", width: 150, type: "brand" },
+  // Free text, not a brand picker: Category must be able to type any value,
+  // including several brands in one cell ("Nike, Adidas, Puma").
+  { key: "brand", label: "Brand", width: 150 },
   { key: "offer", label: "Offer", width: 160 },
   { key: "landing", label: "Landing", width: 200 },
   { key: "title_brief", label: "Title Brief", width: 200 },
@@ -141,18 +142,20 @@ const QC_COLUMNS: ColumnDef[] = [
   { key: "global_limit", label: "GL", width: 60, type: "bool" },
   // Tracking short codes — dropdowns, never free text. Master lists live
   // in lib/trackingMasters.ts so new values need no code change.
-  { fixed: true, key: "campaign_type", label: "Campaign Type", width: 110, type: "select", options: [CAMPAIGN_TYPE_PN] },
-  { fixed: true, key: "campaign_name_code", label: "Campaign Name", width: 110, type: "select", options: [CAMPAIGN_NAME_PRP] },
-  { fixed: true, key: "channel_name", label: "Channel Name", width: 110, type: "select", options: [CHANNEL_NAME_PUSH] },
+  // Entry method from lib/trackingFields.ts — the SAME config the drawer
+  // uses, so Solo PN and Show All PN cannot drift apart.
+  { fixed: true, key: "campaign_type", label: "Campaign Type", width: 110, type: "readonly" },
+  { fixed: true, key: "campaign_name_code", label: "Campaign Name", width: 110, type: "readonly" },
+  { fixed: true, key: "channel_name", label: "Channel Name", width: 110, type: "readonly" },
   { key: "channel_format", label: "Channel Format", width: 110, type: "select", options: CHANNEL_FORMATS },
-  { key: "segment_1", label: "Segment 1", width: 130, type: "select", options: SEGMENT_1_VALUES },
-  { key: "segment_2", label: "Segment 2", width: 110, type: "select", options: SEGMENT_2_VALUES, labels: SEGMENT_2_LABELS },
-  { key: "tracking_category", label: "Category (code)", width: 130, type: "select", options: CATEGORY_VALUES },
-  { key: "tracking_sub_category", label: "Sub Cat (code)", width: 130, type: "select", options: SUB_CATEGORY_VALUES },
+  { key: "segment_1", label: "Segment 1", width: 130 },
+  { key: "segment_2", label: "Segment 2", width: 110 },
+  { key: "tracking_category", label: "Category (code)", width: 130 },
+  { key: "tracking_sub_category", label: "Sub Cat (code)", width: 130 },
   { key: "tracking_brand", label: "Brand (code)", width: 130 },
   { key: "tracking_landing", label: "Landing (code)", width: 110, type: "select", options: LANDING_VALUES },
-  { key: "tracking_offer", label: "Offer (code)", width: 110, type: "select", options: OFFER_VALUES },
-  { key: "keywords", label: "Keywords", width: 120, type: "select", options: KEYWORD_VALUES },
+  { key: "tracking_offer", label: "Offer (code)", width: 110 },
+  { key: "keywords", label: "Keywords", width: 120 },
   { key: "tracking_code_check", label: "Check", width: 130, type: "readonly" },
   { key: "cid", label: "CID", width: 120 },
   { key: "campaign_id_ext", label: "Campaign ID", width: 130 },
@@ -440,6 +443,23 @@ export function BulkWorkspace({
 
   const allSelected = campaigns.length > 0 && campaigns.every((c) => selected.has(c.id));
 
+  /**
+   * In Final QC the far-left checkbox reflects the row's QC state rather
+   * than only its selection, so ticking the ten boxes one by one shows it
+   * checked automatically, and a partial row shows indeterminate.
+   *
+   * Reads the saved checklist merged with the unsaved edits, because a tick
+   * lives in `dirtyQc` until Save Draft.
+   */
+  const qcStateOf = useCallback((id: string): "none" | "some" | "all" => {
+    const saved = (qc[id] ?? {}) as Partial<QcChecklist>;
+    const pending = dirtyQc[id] ?? {};
+    const ticked = QC_CHECKS.filter(
+      (q) => ((pending as Partial<QcChecklist>)[q.key] ?? saved[q.key]) === true).length;
+    if (ticked === 0) return "none";
+    return ticked === QC_CHECKS.length ? "all" : "some";
+  }, [qc, dirtyQc]);
+
   // Generous overscan: a dropdown open on a row scrolled just out of view
   // must not be unmounted mid-interaction.
   /**
@@ -637,9 +657,51 @@ export function BulkWorkspace({
                 return (
                 <tr key={c.id} className={i % 2 ? "bg-[#FCFCFD]" : "bg-surface"}>
                   <td className={`sticky left-0 z-10 border-b border-r border-line px-2 py-1 ${i % 2 ? "bg-[#FCFCFD]" : "bg-surface"}`}>
-                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => setSelected((p) => {
-                      const n = new Set(p); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n;
-                    })} />
+                    <input type="checkbox"
+                      /* In Final QC the box shows the row's QC progress:
+                         checked when all ten are ticked however they were
+                         ticked, indeterminate when only some are. */
+                      checked={isQc ? qcStateOf(c.id) === "all" : selected.has(c.id)}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isQc && qcStateOf(c.id) === "some";
+                      }}
+                      onChange={() => {
+                      const turningOn = isQc
+                        ? qcStateOf(c.id) !== "all"
+                        : !selected.has(c.id);
+                      // The box still drives row SELECTION, so Bulk Push and
+                      // every other bulk action keep working unchanged.
+                      setSelected((p) => {
+                        const n = new Set(p);
+                        if (turningOn) n.add(c.id); else n.delete(c.id);
+                        return n;
+                      });
+                      /**
+                       * Convenience shortcut, ONLY in Final QC: ticking a
+                       * row's own checkbox ticks its ten QC boxes through the
+                       * SAME dirty-QC state a manual tick uses, so it
+                       * satisfies the Push to Calendar gate identically.
+                       *
+                       * Unticking CLEARS all ten, through the same path, so
+                       * the box is a true "check all / clear all" for the
+                       * row. Each box stays independently clickable.
+                       *
+                       * Scoped to this row by c.id. The header Select all
+                       * still only selects, exactly as before.
+                       */
+                      if (isQc) {
+                        // Ticking sets all ten; unticking CLEARS all ten,
+                        // through the same dirtyQc path a manual tick uses.
+                        setDirtyQc((prev) => ({
+                          ...prev,
+                          [c.id]: {
+                            ...prev[c.id],
+                            ...Object.fromEntries(
+                              QC_CHECKS.map((q) => [q.key, turningOn])),
+                          },
+                        }));
+                      }
+                    }} />
                   </td>
                   <td className={`sticky left-10 z-10 whitespace-nowrap border-b border-r border-line px-2 py-1 text-tiny ${i % 2 ? "bg-[#FCFCFD]" : "bg-surface"}`}>
                     <span className="font-medium text-heading">{fmtDate(c.launch_date)}</span>
@@ -679,6 +741,13 @@ export function BulkWorkspace({
                             <option key={o} value={o}>{col.labels?.[o] ?? o}</option>
                           ))}
                         </select>
+                      ) : col.fixed ? (
+                        /* Fixed value, displayed read-only. It still feeds the
+                           generator; CRM never types or picks it. */
+                        <span className="block px-2 py-1.5 text-[12.5px] text-muted">
+                          {valueOf(c, col.key)
+                            || FIXED_TRACKING_VALUES[col.key as keyof typeof FIXED_TRACKING_VALUES]}
+                        </span>
                       ) : col.type === "readonly" && col.longText ? (
                         /* Full text, wrapped, whitespace preserved. No
                            line-clamp, no ellipsis, no title tooltip. */

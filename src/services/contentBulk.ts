@@ -56,6 +56,17 @@ export async function saveImportedContent(
   await inBatches(rows, async (r) => {
     try {
       const prev = before.get(r.campaignId);
+      /**
+       * Re-checked at IMPORT time, not only at export. A row submitted or
+       * finalized while the workbook was being filled offline must not be
+       * silently overwritten with older copy. Reported through the existing
+       * per-row outcome pattern, so the user sees which PN was skipped.
+       */
+      if (prev && !isAwaitingCopy(prev)) {
+        throw new Error(
+          "No longer awaiting copy — it was submitted or finalized after the export. "
+          + "Skipped so finished work is not overwritten.");
+      }
       const changed = diffContentFields(
         { header: prev?.header ?? "", sub_copy_text: prev?.sub_copy_text ?? "",
           reference_link: prev?.reference_link ?? "" },
@@ -207,9 +218,24 @@ export const logExport = (
  * the primary export: Content thinks in terms of outstanding work, not row
  * numbers.
  */
+/**
+ * "Awaiting your copy" — THE eligibility rule for bulk export and import.
+ *
+ * Exported AND counted from this one function, so the displayed count and
+ * the workbook can never disagree. Date-range export previously filtered
+ * the full campaign list and ignored status, which is why submitted and
+ * completed rows appeared in the file.
+ *
+ * Excluded: SUBMITTED (copy done), NOT_ASSIGNED (not sent to Content yet),
+ * anything on the calendar, and anything past QC.
+ */
+export const isAwaitingCopy = (c: Campaign) =>
+  (c.content_status === "PENDING" || c.content_status === "NEEDS_CHANGES")
+  && c.calendar_status !== "UPDATED"
+  && c.qc_status !== "PASSED";
+
 export const pendingForContent = (campaigns: Campaign[]) =>
-  campaigns.filter((c) =>
-    c.content_status === "PENDING" || c.content_status === "NEEDS_CHANGES");
+  campaigns.filter(isAwaitingCopy);
 
 /*
  * The CRM-facing "Changed Fields" panel was REMOVED at the product owner's

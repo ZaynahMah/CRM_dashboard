@@ -6,6 +6,8 @@ import type { QcMap } from "@/lib/crmBuckets";
 import { contentSubmitted, withContent } from "@/lib/crmBuckets";
 import { Button, Card, Pill, Empty } from "./ui";
 import { fmtDate, fmtTime } from "@/lib/format";
+import { businessWeekOf } from "@/lib/businessWeeks";
+import { campaignDateIso } from "@/lib/campaignDate";
 import { BulkWorkspace, type WorkspaceMode } from "./BulkWorkspace";
 import { lockCategoryInput, submitContentRow, type BulkCalendarOutcome } from "@/services/campaigns";
 
@@ -108,6 +110,51 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
     return outcomes;
   };
 
+  /**
+   * CATEGORY sees its incoming PN work grouped by CAMPAIGN WEEK.
+   *
+   * The week comes from the PN's own launch date — never from when CRM sent
+   * it, nor from updated_at / created_at / submitted_at. A PN handed over on
+   * 1 October but scheduled for 12 October belongs under 8–14 October, so
+   * sending several future weeks at once distributes them correctly with no
+   * further action.
+   *
+   * Weeks are the existing calendar buckets (1-7, 8-14, 15-21, 22-28,
+   * 29-end) from `businessWeekOf`, and only weeks that actually have PNs are
+   * rendered — the list rolls into November and beyond on its own.
+   *
+   * The pending/submitted split and the Show All PN behaviour are the same
+   * rules used above; this only groups them.
+   */
+  const weekSections = useMemo(() => {
+    if (role !== "CATEGORY") return [];
+    const byWeek = new Map<string, { label: string; start: string; rows: Campaign[] }>();
+    for (const c of [...pending, ...submitted]) {
+      const iso = campaignDateIso(c.launch_date);
+      // A PN with no usable campaign date cannot be placed in a week; it is
+      // surfaced separately below rather than dropped.
+      if (!iso) continue;
+      const w = businessWeekOf(iso);
+      if (!byWeek.has(w.key)) byWeek.set(w.key, { label: w.label, start: w.start, rows: [] });
+      byWeek.get(w.key)!.rows.push(c);
+    }
+    return [...byWeek.entries()]
+      .sort((a, b) => a[1].start.localeCompare(b[1].start))
+      .map(([key, w]) => ({
+        key,
+        label: w.label,
+        rows: w.rows,
+        pending: w.rows.filter((c) => c.category_status !== "LOCKED"),
+        submitted: w.rows.filter((c) => c.category_status === "LOCKED"),
+      }));
+  }, [role, pending, submitted]);
+
+  /** PNs CRM sent that carry no usable campaign date. Never silently lost. */
+  const undated = useMemo(
+    () => (role !== "CATEGORY" ? []
+      : [...pending, ...submitted].filter((c) => !campaignDateIso(c.launch_date))),
+    [role, pending, submitted]);
+
   if (campaigns.length === 0) {
     return (
       <Card>
@@ -116,6 +163,79 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
             ? "CRM hasn't sent any campaign slots yet."
             : "CRM hasn't routed any campaigns for copy yet."} />
       </Card>
+    );
+  }
+
+  if (role === "CATEGORY") {
+    return (
+      <>
+        {weekSections.length === 0 && undated.length === 0 ? (
+          <Card>
+            <Empty title="Nothing waiting on you right now"
+              hint="CRM hasn't sent any campaign slots yet." />
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {weekSections.map((w) => (
+              <Card key={w.key} pad={false}>
+                <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-5 py-3.5">
+                  <h3 className="font-display text-[15px] font-600 text-heading">{w.label}</h3>
+                  <Pill dot={false} label={`All PN (${w.rows.length})`} tone="indigo" />
+                  <Pill dot={false} label={`Pending your input (${w.pending.length})`}
+                    tone={w.pending.length > 0 ? "warning" : "neutral"} />
+                  <Pill dot={false} label={`Submitted to CRM (${w.submitted.length})`}
+                    tone={w.submitted.length > 0 ? "success" : "neutral"} />
+                  <div className="ml-auto">
+                    {/* The SAME workspace, scoped to this week's rows. */}
+                    <Button size="sm" variant="ghost"
+                      onClick={() => setWorkspace({ mode, rows: w.rows, run })}>
+                      Show All PN ({w.rows.length})
+                    </Button>
+                  </div>
+                </div>
+                <QueueBucket label={pendingLabel} tone="warning" rows={w.pending} onOpen={onOpenCampaign} />
+                <QueueBucket label={submittedLabel} tone="success" rows={w.submitted} onOpen={onOpenCampaign} />
+              </Card>
+            ))}
+
+            {undated.length > 0 && (
+              <Card pad={false}>
+                <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-5 py-3.5">
+                  <h3 className="font-display text-[15px] font-600 text-heading">No campaign date</h3>
+                  <Pill dot={false} label={`${undated.length} PN`} tone="warning" />
+                  <span className="text-micro text-faint">
+                    CRM sent these without a usable date, so they cannot be placed in a week.
+                  </span>
+                  <div className="ml-auto">
+                    <Button size="sm" variant="ghost"
+                      onClick={() => setWorkspace({ mode, rows: undated, run })}>
+                      Show All PN ({undated.length})
+                    </Button>
+                  </div>
+                </div>
+                <QueueBucket label={pendingLabel} tone="warning"
+                  rows={undated.filter((c) => c.category_status !== "LOCKED")} onOpen={onOpenCampaign} />
+                <QueueBucket label={submittedLabel} tone="success"
+                  rows={undated.filter((c) => c.category_status === "LOCKED")} onOpen={onOpenCampaign} />
+              </Card>
+            )}
+          </div>
+        )}
+
+        {workspace && (
+          <BulkWorkspace
+            mode={workspace.mode}
+            campaigns={workspace.rows}
+            qc={qc}
+            profileId={profileId}
+            onClose={() => setWorkspace(null)}
+            onSaved={onChanged}
+            onPrimary={workspace.run}
+            staleIds={staleIds}
+            onReloadRow={onReloadRow}
+          />
+        )}
+      </>
     );
   }
 

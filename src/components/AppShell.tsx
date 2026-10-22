@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSession } from "./SessionProvider";
 import { signOut } from "@/services/auth";
+import { pendingChangeRequestCount, onChangeRequestsUpdated } from "@/services/campaigns";
 import { Drawer } from "./ui";
 import { Icon } from "./icons";
 import { listSystemNotifications, type SystemNotification } from "@/services/categorySla";
@@ -37,6 +38,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
    * than an error: the shell must render for every role regardless.
    */
   const [alerts, setAlerts] = useState<SystemNotification[]>([]);
+  /** Outstanding change requests, for the badge on the Changes nav item. */
+  const [pendingChanges, setPendingChanges] = useState(0);
   const [alertsLoaded, setAlertsLoaded] = useState(false);
 
   useEffect(() => {
@@ -48,6 +51,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .finally(() => { if (!cancelled) setAlertsLoaded(true); });
     return () => { cancelled = true; };
   }, [profile]);
+
+  /**
+   * Keeps the Changes badge current. It refreshes on navigation AND when
+   * the Changes page signals that a request was accepted or rejected, so
+   * the count drops the moment CRM acts rather than on the next page move.
+   */
+  const refreshPendingChanges = useCallback(() => {
+    if (!profile) return;
+    pendingChangeRequestCount()
+      .then(setPendingChanges)
+      .catch(() => setPendingChanges(0));
+  }, [profile]);
+
+  useEffect(() => { refreshPendingChanges(); }, [refreshPendingChanges, pathname]);
+
+  useEffect(() => onChangeRequestsUpdated(refreshPendingChanges),
+    [refreshPendingChanges]);
   useEffect(() => { if (!loading && !profile) router.replace("/login"); }, [loading, profile, router]);
   useEffect(() => { setNavOpen(false); }, [pathname]);
   if (loading || !profile) return <div className="grid h-screen place-items-center"><span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" /></div>;
@@ -66,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {groups.map((g) => (<div key={g} className="mb-3"><div className="px-3 pb-1 text-[10px] font-600 uppercase tracking-wider text-faint">{g}</div>
             <ul className="space-y-0.5">{items.filter((i) => i.group === g).map((n) => {
               const active = pathname === n.href;
-              return (<li key={n.href}><Link href={n.href} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] transition-colors ${active ? "bg-indigo-50 font-medium text-indigo-700" : "text-body hover:bg-[#F9FAFB]"}`}><span className={active ? "text-indigo-600" : "text-faint"}>{n.icon()}</span>{n.label}</Link></li>);
+              return (<li key={n.href}><Link href={n.href} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] transition-colors ${active ? "bg-indigo-50 font-medium text-indigo-700" : "text-body hover:bg-[#F9FAFB]"}`}><span className={active ? "text-indigo-600" : "text-faint"}>{n.icon()}</span>{n.label}{n.href === "/changes" && pendingChanges > 0 && (<span className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger-500 px-1.5 text-[10px] font-700 text-white">{pendingChanges > 99 ? "99+" : pendingChanges}</span>)}</Link></li>);
             })}</ul></div>))}
         </nav>
         <div className="border-t border-line p-3"><div className="flex items-center gap-2 px-2 py-2">
