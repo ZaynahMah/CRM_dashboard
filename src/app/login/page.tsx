@@ -8,7 +8,6 @@ import { HOME_FOR_ROLE } from "@/types/user";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { Button, Field } from "@/components/ui";
 import { Icon } from "@/components/icons";
-import { BRAND_TITLE } from "@/lib/brand";
 
 const HIGHLIGHTS = [
   ["Calendar orchestration", "One date holds seven slots. Category plans against slots CRM opens."],
@@ -47,7 +46,7 @@ export default function LoginPage() {
 
         <div className="relative flex items-center gap-2.5 text-white">
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/20">{Icon.bell(18)}</span>
-          <span className="font-display text-[16px] font-700">{BRAND_TITLE}</span>
+          <span className="font-display text-[16px] font-700">CLiQ Push Ops</span>
         </div>
 
         <div className="relative">
@@ -74,7 +73,7 @@ export default function LoginPage() {
           </ul>
         </div>
 
-        <div className="relative text-micro text-white/50">{BRAND_TITLE} · Internal</div>
+        <div className="relative text-micro text-white/50">Tata CLiQ Fashion &amp; Luxury · Internal</div>
       </section>
 
       {/* Form */}
