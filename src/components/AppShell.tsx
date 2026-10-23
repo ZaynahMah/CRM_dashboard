@@ -6,6 +6,7 @@ import { useSession } from "./SessionProvider";
 import { signOut } from "@/services/auth";
 import { pendingChangeRequestCount, onChangeRequestsUpdated } from "@/services/campaigns";
 import { Drawer } from "./ui";
+import { BRAND_TITLE } from "@/lib/brand";
 import { Icon } from "./icons";
 import { listSystemNotifications, type SystemNotification } from "@/services/categorySla";
 import { fmtDate } from "@/lib/format";
@@ -78,9 +79,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className={`fixed inset-y-0 left-0 z-30 flex w-[228px] flex-col border-r border-line bg-surface transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white">{Icon.bell(15)}</span>
-          <div><div className="font-display text-[14px] font-700 text-heading">CLiQ Push Ops</div><div className="text-[10px] text-faint">Fashion &amp; Luxury</div></div>
+        {/* No logo after login: the brand title alone, in the same place
+            and styling the product name used. */}
+        <div className="flex items-center px-5 py-5">
+          <div className="font-display text-[14px] font-700 leading-snug text-heading">{BRAND_TITLE}</div>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 pb-4">
           {groups.map((g) => (<div key={g} className="mb-3"><div className="px-3 pb-1 text-[10px] font-600 uppercase tracking-wider text-faint">{g}</div>
