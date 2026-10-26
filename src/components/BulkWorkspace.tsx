@@ -9,6 +9,9 @@ import {
 } from "@/lib/trackingCode";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { Button, Pill } from "./ui";
+import {
+  CAMPAIGN_CATEGORY_FILTER_OPTIONS, ALL_CATEGORIES_LABEL, filterByCategory,
+} from "@/lib/categoryFilter";
 import { creativeRequired, QC_NA_LABEL } from "@/lib/workflow";
 import { Icon } from "./icons";
 import { markRowDirty, isRowDirty, onDashboardReset } from "./useCampaigns";
@@ -80,6 +83,15 @@ interface ColumnDef {
 
 /** What Category fills in. Mirrors categoryValidation's mandatory set. */
 const CATEGORY_INPUT_COLUMNS: ColumnDef[] = [
+  // The original CRM/category input context, read-only: Category needs to
+  // see what it is writing against. Date and Time are SEPARATE columns —
+  // the sticky left block already shows a combined "Date / Time", and a
+  // combined cell cannot be read or scanned per field.
+  { key: "launch_date", label: "Date", width: 100, type: "readonly" },
+  { key: "launch_time", label: "Time", width: 80, type: "readonly" },
+  { key: "slot_number", label: "Slot", width: 64, type: "readonly" },
+  { key: "pncc_segment_label", label: "Segment", width: 150, type: "readonly" },
+  { key: "category", label: "Category", width: 130, type: "readonly" },
   { key: "campaign_name", label: "Campaign Name", width: 190, type: "readonly" },
   { key: "sub_category", label: "Sub Category", width: 140 },
   // Free text, not a brand picker: Category must be able to type any value,
@@ -207,6 +219,11 @@ export function BulkWorkspace({
   /** Per-PN results of the last bulk action, shown until dismissed. */
   const [outcomes, setOutcomes] = useState<BulkCalendarOutcome[] | null>(null);
   /** "Apply to selected rows": which column, and which value. */
+  /**
+   * Controlled Category filter. Affects VISIBLE ROWS ONLY — see the note on
+   * `visibleCampaigns` for why selection is pruned alongside it.
+   */
+  const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES_LABEL);
   const [fillKey, setFillKey] = useState<string>("");
   const [fillValue, setFillValue] = useState<string>("");
 
@@ -279,6 +296,19 @@ export function BulkWorkspace({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [dirtyCount, onClose]);
+
+  /**
+   * Read-only context cells. Dates and times are formatted for reading;
+   * anything genuinely absent shows an em dash rather than a blank or a
+   * fabricated value.
+   */
+  const contextValue = useCallback((c: Campaign, key: keyof Campaign): string => {
+    if (key === "launch_date") return c.launch_date ? fmtDate(c.launch_date) : "—";
+    if (key === "launch_time") return c.launch_time ? fmtTime(c.launch_time) : "—";
+    const raw = c[key];
+    if (raw === null || raw === undefined || String(raw).trim() === "") return "—";
+    return String(raw);
+  }, []);
 
   const valueOf = useCallback((c: Campaign, key: keyof Campaign) => {
     const patch = dirty[c.id];
@@ -441,7 +471,28 @@ export function BulkWorkspace({
     onClose();
   };
 
-  const allSelected = campaigns.length > 0 && campaigns.every((c) => selected.has(c.id));
+  /**
+   * Rows after the Category filter. The filter changes what is SHOWN; it
+   * never alters a campaign.
+   *
+   * Selection is pruned to the visible set whenever the filter changes, so
+   * Lock & Submit To CRM can never act on a row the user cannot see. That
+   * was the risk: select 60 rows, filter to Electronics, press Lock, and
+   * submit 60 instead of the 8 on screen.
+   */
+  const visibleCampaigns = useMemo(
+    () => filterByCategory(campaigns, categoryFilter), [campaigns, categoryFilter]);
+
+  useEffect(() => {
+    const visibleIds = new Set(visibleCampaigns.map((c) => c.id));
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => visibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visibleCampaigns]);
+
+  const allSelected = visibleCampaigns.length > 0
+    && visibleCampaigns.every((c) => selected.has(c.id));
 
   /**
    * In Final QC the far-left checkbox reflects the row's QC state rather
@@ -474,16 +525,17 @@ export function BulkWorkspace({
    */
   const wrapRows = mode === "CONTENT_INPUT";
   const NATURAL_HEIGHT_LIMIT = 400;
-  const renderAll = wrapRows && campaigns.length <= NATURAL_HEIGHT_LIMIT;
+  const renderAll = wrapRows && visibleCampaigns.length <= NATURAL_HEIGHT_LIMIT;
 
   const OVERSCAN = 12;
   const rowH = wrapRows ? 96 : ROW_HEIGHT;      // wrapped rows are taller
   const first = renderAll ? 0 : Math.max(0, Math.floor(scrollTop / rowH) - OVERSCAN);
   const visibleCount = Math.ceil(viewportH / rowH) + OVERSCAN * 2;
-  const last = renderAll ? campaigns.length : Math.min(campaigns.length, first + visibleCount);
-  const visibleRows = campaigns.slice(first, last);
+  const last = renderAll ? visibleCampaigns.length
+    : Math.min(visibleCampaigns.length, first + visibleCount);
+  const visibleRows = visibleCampaigns.slice(first, last);
   const padTop = renderAll ? 0 : first * rowH;
-  const padBottom = renderAll ? 0 : Math.max(0, (campaigns.length - last) * rowH);
+  const padBottom = renderAll ? 0 : Math.max(0, (visibleCampaigns.length - last) * rowH);
   const primaryLabel =
     mode === "FINAL_QC" ? "Bulk Push To Calendar"
     : mode === "CATEGORY_INPUT" ? "Lock & Submit To CRM"
@@ -523,6 +575,26 @@ export function BulkWorkspace({
           <Button size="sm" disabled={busy !== null || selected.size === 0} onClick={runPrimary}>
             {busy === "primary" ? "Working..." : `${primaryLabel}${selected.size ? ` (${selected.size})` : ""}`}
           </Button>
+
+          {/* Category filter, beside the primary action. Controlled list —
+              never built from historical records. Changing it prunes the
+              selection to what is visible, so the primary action above can
+              never submit a hidden row. */}
+          <select
+            aria-label="Filter by category"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="!m-0 !w-[170px] !py-1 !text-[12px]">
+            <option value={ALL_CATEGORIES_LABEL}>{ALL_CATEGORIES_LABEL}</option>
+            {CAMPAIGN_CATEGORY_FILTER_OPTIONS.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          {categoryFilter !== ALL_CATEGORIES_LABEL && (
+            <span className="text-micro text-muted">
+              {visibleCampaigns.length} of {campaigns.length} shown
+            </span>
+          )}
           {isQc && (
             <>
               <span className="mx-1 h-4 w-px bg-line" />
@@ -630,7 +702,7 @@ export function BulkWorkspace({
                     never loses its identity. */}
                 <th className="sticky left-0 top-0 z-30 w-10 border-b border-r border-line bg-[#F9FAFB] px-2 py-2">
                   <input type="checkbox" checked={allSelected}
-                    onChange={() => setSelected(allSelected ? new Set() : new Set(campaigns.map((c) => c.id)))} />
+                    onChange={() => setSelected(allSelected ? new Set() : new Set(visibleCampaigns.map((c) => c.id)))} />
                 </th>
                 <th className="sticky left-10 top-0 z-30 w-[150px] border-b border-r border-line bg-[#F9FAFB] px-2 py-2 text-left text-micro font-600 uppercase tracking-wide text-faint">
                   Date / Time
@@ -756,7 +828,7 @@ export function BulkWorkspace({
                         </span>
                       ) : col.type === "readonly" ? (
                         <span className="block px-2 py-1.5 text-[12.5px] text-muted">
-                          {valueOf(c, col.key) || "—"}
+                          {contextValue(c, col.key)}
                         </span>
                       ) : col.longText ? (
                         /* An auto-growing textarea, not a single-line input:

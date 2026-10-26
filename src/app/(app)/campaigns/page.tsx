@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  CAMPAIGN_CATEGORY_FILTER_OPTIONS, ALL_CATEGORIES_LABEL, matchesCategoryFilter,
+} from "@/lib/categoryFilter";
 import { useSession } from "@/components/SessionProvider";
 import { useCampaigns } from "@/components/useCampaigns";
 import { CampaignDrawer } from "@/components/CampaignDrawer";
 import { ChannelChip, DeadlineChip, OriginChip, StageChip } from "@/components/StatusChip";
 import { Card, Empty, Loading, PageHead, TableCard } from "@/components/ui";
-import { CATEGORIES } from "@/components/CampaignForm";
 import { stageOf, STAGE_LABEL, STAGE_ORDER } from "@/lib/workflow";
 import { fmtDate, fmtTime } from "@/lib/format";
 
@@ -15,7 +17,7 @@ export default function CampaignsPage() {
   const { campaigns, loading, reload } = useCampaigns();
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState(ALL_CATEGORIES_LABEL);
   const [origin, setOrigin] = useState("");
   const [stage, setStage] = useState("");
 
@@ -24,7 +26,11 @@ export default function CampaignsPage() {
     return campaigns.filter((c) => {
       if (term && ![c.campaign_name, c.brand, c.category, c.offer, c.campaign_id_ext]
         .some((v) => v?.toLowerCase().includes(term))) return false;
-      if (category && c.category !== category) return false;
+      // Alias-aware: stored values use sheet abbreviations, the filter
+      // shows the approved labels. AND with Origin and Stage, each
+      // independent — changing one never resets the others.
+      if (!matchesCategoryFilter(c.category, category)
+        && !matchesCategoryFilter(c.pncc_category_code, category)) return false;
       if (origin && c.campaign_origin !== origin) return false;
       if (stage && stageOf(c) !== stage) return false;
       return true;
@@ -49,8 +55,10 @@ export default function CampaignsPage() {
         <label className="block">
           <span className="mb-1.5 block text-tiny font-medium text-body">Category</span>
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">All categories</option>
-            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+            {/* The SAME controlled list Show All PN uses, so every login
+                sees identical options. */}
+            <option value={ALL_CATEGORIES_LABEL}>{ALL_CATEGORIES_LABEL}</option>
+            {CAMPAIGN_CATEGORY_FILTER_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="block">

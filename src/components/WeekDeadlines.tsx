@@ -5,7 +5,8 @@ import type { Campaign } from "@/types/campaign";
 import { Pill } from "./ui";
 import { fmtDate, isoDate, toDate } from "@/lib/format";
 import { categoryDeadlineForWeek } from "@/lib/businessWeeks";
-import { inWeek, inMonth, dedupeById } from "@/lib/campaignDate";
+import { inWeek, dedupeById } from "@/lib/campaignDate";
+import { planningWindow, planningWeeks, withinPlanningWindow } from "@/lib/planningWindow";
 
 interface WeekBlock {
   weekLabel: string;
@@ -39,94 +40,48 @@ export function WeekDeadlines({ campaigns, monthStart }: {
     const rows = dedupeById(campaigns);
 
     /**
-     * ONGOING-MONTH GATE. Rows whose campaign date falls in the month being
-     * shown. The week ranges below already confine results to this month,
-     * so this is a belt-and-braces guard — and it makes the rule explicit
-     * rather than incidental, which is what let the old bug hide.
+     * The planning window: first of the current month through the 14th of
+     * the next. Campaigns are placed by CAMPAIGN DATE, so a PN submitted in
+     * October for November appears in its November week.
      *
-     * `monthStart` is passed in from the system clock, so this rolls into
-     * November, December and January with no change.
+     * Week buckets are generated FROM the window, so the count follows the
+     * dates rather than a hard-coded number.
      */
-    const monthRows = inMonth(rows, monthStart);
-    const monthHasData = monthRows.length > 0;
-    const year = monthStart.getFullYear();
-    const month = monthStart.getMonth();
-    const lastDay = new Date(year, month + 1, 0).getDate();
+    const win = planningWindow(monthStart);
+    const windowRows = withinPlanningWindow(rows, win);
+    const monthHasData = windowRows.length > 0;
 
-    for (let d = 1; d <= lastDay; d += 7) {
-      const ws = new Date(year, month, d);
-      const we = new Date(year, month, Math.min(d + 6, lastDay));
-      // THE one deadline rule: business week start minus 7 days. This used
-      // to subtract 9 ("1 week + 2 days buffer"), which contradicted both
-      // the generated column in the schema and lib/deadlines.ts — Category
-      // was shown a deadline two days earlier than the database recorded.
-      // There is now a single rule, in lib/businessWeeks.ts.
-      const deadline = toDate(categoryDeadlineForWeek(isoDate(ws)));
-
-      const wsIso = isoDate(ws);
-      const weIso = isoDate(we);
-      // Scoped by CAMPAIGN DATE (launch_date) — never by updated_at, a
-      // review timestamp, an upload time or the deadline.
-      const weekCampaigns = inWeek(monthRows, wsIso, weIso);
+    for (const week of planningWeeks(win)) {
+      const weekCampaigns = inWeek(windowRows, week.start, week.end);
 
       /**
        * PRE-EXISTING definition, deliberately unchanged: a campaign counts
        * as filled when Brand and Offer are both present.
-       *
-       * Worth knowing: the app holds THREE different notions of a Category
-       * submission being complete, and they disagree —
-       *   here                      brand && offer                (2 fields)
-       *   lib/categoryValidation    CATEGORY_REQUIRED             (6 fields)
-       *   migration 24 SLA          category_status in LOCKED/SUBMITTED
-       * This is the loosest of the three. It is kept as-is because changing
-       * it would change every number in this table, which is a product
-       * decision, not a bug fix.
        */
       const filled = weekCampaigns.filter((c) => c.brand && c.offer).length;
       const total = weekCampaigns.length;
 
       /**
        * Status depends on ACTUAL CAMPAIGN RECORDS, not on the calendar.
-       *
-       * The bug this replaces was `else if (deadline < t) status = "In
-       * Progress"`, which made every week with a passed deadline look
-       * active even with zero campaigns — producing the impossible
-       * "0 campaigns · 0 / 0 · In Progress".
-       *
-       * A deadline says when input was DUE. Only a campaign row proves work
-       * EXISTS. The two are separate concepts and the first must never
-       * stand in for the second.
-       */
-      /**
-       * The status invariant:
-       *   total === 0                  -> Pending
-       *   total > 0 && filled < total  -> In Progress
-       *   total > 0 && filled === total-> Completed
-       *
-       * `filled` and the Completed mapping are BOTH pre-existing product
-       * rules, carried over unchanged. See the note above `filled`.
+       * A deadline says when input was DUE; only a campaign row proves work
+       * EXISTS. Zero campaigns is never "In Progress".
        */
       let status: WeekBlock["status"] = "Pending";
-      // Explicit guards, in the order the rules were stated.
-      if (!monthHasData) {
-        status = "Pending";              // no current-month input at all
-      } else if (total === 0) {
-        status = "Pending";              // nothing for THIS week
-      } else if (filled < total) {
-        status = "In Progress";
-      } else {
-        status = "Completed";
-      }
+      if (!monthHasData) status = "Pending";
+      else if (total === 0) status = "Pending";
+      else if (filled < total) status = "In Progress";
+      else status = "Completed";
 
       blocks.push({
-        weekLabel: `${fmtDate(wsIso)} – ${fmtDate(weIso)}`,
-        weekStart: wsIso,
-        weekEnd: weIso,
-        deadline: isoDate(deadline),
+        weekLabel: week.label,
+        weekStart: week.start,
+        weekEnd: week.end,
+        deadline: categoryDeadlineForWeek(week.start),
         campaigns: weekCampaigns,
         status,
       });
     }
+
     return blocks;
   }, [campaigns, monthStart]);
 

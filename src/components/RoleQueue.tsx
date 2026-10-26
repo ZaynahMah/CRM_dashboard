@@ -8,6 +8,7 @@ import { Button, Card, Pill, Empty } from "./ui";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { businessWeekOf } from "@/lib/businessWeeks";
 import { campaignDateIso } from "@/lib/campaignDate";
+import { planningWindow } from "@/lib/planningWindow";
 import { BulkWorkspace, type WorkspaceMode } from "./BulkWorkspace";
 import { lockCategoryInput, submitContentRow, type BulkCalendarOutcome } from "@/services/campaigns";
 
@@ -128,17 +129,25 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
    */
   const weekSections = useMemo(() => {
     if (role !== "CATEGORY") return [];
+    const win = planningWindow();
     const byWeek = new Map<string, { label: string; start: string; rows: Campaign[] }>();
     for (const c of [...pending, ...submitted]) {
       const iso = campaignDateIso(c.launch_date);
       // A PN with no usable campaign date cannot be placed in a week; it is
       // surfaced separately below rather than dropped.
       if (!iso) continue;
+      // Placed by CAMPAIGN DATE, never by when CRM sent it.
+      if (iso < win.start || iso > win.end) continue;
       const w = businessWeekOf(iso);
       if (!byWeek.has(w.key)) byWeek.set(w.key, { label: w.label, start: w.start, rows: [] });
       byWeek.get(w.key)!.rows.push(c);
     }
     return [...byWeek.entries()]
+      // Only weeks inside the planning window: current-month start through
+      // the 14th of next month. A November PN submitted in October is here;
+      // one dated 15 November is not, and remains reachable from All
+      // Campaigns.
+      .filter(([, w]) => w.start <= win.end && w.rows.length > 0)
       .sort((a, b) => a[1].start.localeCompare(b[1].start))
       .map(([key, w]) => ({
         key,

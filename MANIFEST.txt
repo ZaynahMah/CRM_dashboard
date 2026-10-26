@@ -19,7 +19,6 @@ scripts/db-qc-scenarios.sql
 scripts/db-qc-sla.sql
 scripts/db-qc-streams.sql
 scripts/db-qc.sh
-scripts/fix-stale-deletions.sh
 scripts/pg-bootstrap.sql
 scripts/static-qc.sh
 scripts/verify-package.sh
@@ -92,6 +91,7 @@ src/lib/businessWeeks.test.ts
 src/lib/businessWeeks.ts
 src/lib/campaignDate.test.ts
 src/lib/campaignDate.ts
+src/lib/categoryFilter.ts
 src/lib/categoryValidation.ts
 src/lib/categoryWeekQueue.test.ts
 src/lib/columnMatch.ts
@@ -113,6 +113,8 @@ src/lib/paging.test.ts
 src/lib/paging.ts
 src/lib/performanceAnalysis.ts
 src/lib/performanceInsights.ts
+src/lib/planningWindow.test.ts
+src/lib/planningWindow.ts
 src/lib/productionFixes.test.ts
 src/lib/qcGate.test.ts
 src/lib/sheetProfile.ts
