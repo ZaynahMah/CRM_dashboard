@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
-import { log, notify } from "@/services/campaigns";
+import { log, notify, runningPnCount, resetRunningPns } from "@/services/campaigns";
 import { downloadCSV } from "@/services/exportExcel";
 import type { Campaign } from "@/types/campaign";
 import { profileSheet } from "@/lib/sheetProfile";
@@ -11,6 +11,7 @@ import { resolveColumns, pick, type FieldKey } from "@/lib/columnMatch";
 import { excelValueToIsoDate, excelValueToTime } from "@/lib/excelDates";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { Button, Card, Modal, Pill } from "./ui";
+import { useSession } from "./SessionProvider";
 import { Icon } from "./icons";
 
 interface ParsedRow {
@@ -190,12 +191,47 @@ interface ReplacePreview {
 export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
   profileId: string; isCrmSelf?: boolean; onDone: () => void;
 }) {
+  // This component is only rendered for CRM, but the Reset control is
+  // gated explicitly rather than by assumption — and the server route
+  // returns 403 regardless of what the UI renders.
+  const { profile } = useSession();
+  const isCrm = profile?.role === "CRM";
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [checkingReplace, setCheckingReplace] = useState(false);
   const [replacePreview, setReplacePreview] = useState<ReplacePreview | null>(null);
   /** Typed confirmation. The button stays disabled until it reads RESET. */
   const [confirmText, setConfirmText] = useState("");
+  /** Running PNs in THIS flow — the N shown before confirming. */
+  const [runningCount, setRunningCount] = useState(0);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetTyped, setResetTyped] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const flowLabel = isCrmSelf ? "CRM Self" : "Category-led";
+
+  const refreshRunning = useCallback(() => {
+    if (!isCrm) return;
+    runningPnCount(isCrmSelf).then(setRunningCount).catch(() => setRunningCount(0));
+  }, [isCrm, isCrmSelf]);
+
+  useEffect(() => { refreshRunning(); }, [refreshRunning]);
+
+  const doReset = async () => {
+    setResetBusy(true); setResetError(null);
+    try {
+      const n = await resetRunningPns(isCrmSelf);
+      setResetOpen(false);
+      setToast(`${n} PNs reset. Upload a new file to start again.`);
+      refreshRunning();
+      onDone();
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : String(e));
+    }
+    setResetBusy(false);
+  };
   const [downloading, setDownloading] = useState(false);
 
   /**
@@ -390,7 +426,7 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
           <p className="mt-0.5 text-micro text-faint">
             {isCrmSelf
               ? "Campaigns CRM owns end-to-end — no Category input needed. Same columns: Day, Time, Slot, Segment, Category."
-              : "Columns: Day, Time, Slot, Segment, Category. Multiple PNs can share a slot — that's normal. This file is the source of truth: uploading replaces every existing campaign, not just these dates."}
+              : "Columns: Day, Time, Slot, Segment, Category. Multiple PNs can share a slot — that's normal. This file is the source of truth: uploading replaces the RUNNING PNs of this stream only — campaigns already on the calendar, past Final QC or production-ready are kept."}
           </p>
         </div>
 
@@ -399,7 +435,27 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
           <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={reading}
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
         </label>
+
+        {/* CRM only. Hidden for every other role, and the server route
+            returns 403 regardless of what the UI shows. */}
+        {isCrm && (
+          <span title={runningCount === 0 ? "Nothing running" : undefined}>
+            <Button variant="danger" disabled={reading || runningCount === 0}
+              onClick={() => { setResetTyped(""); setResetError(null); setResetOpen(true); }}>
+              Reset{runningCount > 0 ? ` (${runningCount})` : ""}
+            </Button>
+          </span>
+        )}
       </div>
+
+      {toast && (
+        <div className="mt-4 flex items-start justify-between gap-2 rounded-lg bg-success-50 px-4 py-3 text-tiny text-success-700">
+          <span>{toast}</span>
+          <button onClick={() => setToast(null)} className="font-medium hover:underline">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 flex items-start gap-2 rounded-lg bg-danger-50 px-4 py-3 text-tiny text-danger-700">
@@ -469,6 +525,40 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
         </div>
       )}
 
+      <Modal open={resetOpen} onClose={() => setResetOpen(false)}
+        title={`Reset running ${flowLabel} PNs`}>
+        <div className="space-y-4">
+          <p className="rounded-lg bg-danger-50 px-4 py-3 text-tiny text-danger-700">
+            This will reset <span className="font-medium">{runningCount}</span> running{" "}
+            {flowLabel} PNs to 0. They&rsquo;ll be moved to the archive.
+          </p>
+          <p className="text-tiny text-muted">
+            PNs already on the calendar, past Final QC or production-ready are not
+            touched, and neither is the archive or the activity history.
+          </p>
+          <div>
+            <label className="text-tiny text-muted">
+              Type <span className="font-mono font-medium text-heading">RESET</span> to confirm
+            </label>
+            <input value={resetTyped} onChange={(e) => setResetTyped(e.target.value)}
+              placeholder="RESET" className="mt-1 !font-mono" autoFocus />
+          </div>
+          {resetError && (
+            <p className="rounded-lg bg-danger-50 px-3 py-2 text-tiny text-danger-700">
+              {resetError}
+            </p>
+          )}
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" disabled={resetBusy}
+              onClick={() => setResetOpen(false)}>Cancel</Button>
+            <Button variant="danger" disabled={resetBusy || resetTyped !== "RESET"}
+              onClick={doReset}>
+              {resetBusy ? "Resetting..." : `Reset ${runningCount} PNs`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={!!replacePreview} onClose={() => { setReplacePreview(null); setConfirmText(""); }}
         title="Full reset — this deletes every campaign">
         {replacePreview && (
@@ -481,7 +571,7 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
                 <span className="font-medium">Upload type:</span> {replacePreview.stream}
               </div>
               <div className="mt-1">
-                <span className="font-medium">Rows to archive and replace:</span>{" "}
+                <span className="font-medium">Running rows to archive and replace:</span>{" "}
                 {replacePreview.total} — replaced with this file&rsquo;s{" "}
                 <span className="font-medium">{parsed.length}</span> rows.
               </div>

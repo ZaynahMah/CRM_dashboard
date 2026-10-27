@@ -555,3 +555,38 @@ export function onChangeRequestsUpdated(fn: () => void) {
 export function notifyChangeRequestsUpdated() {
   changeRequestListeners.forEach((fn) => fn());
 }
+
+
+/* ───────────────────────── reset running PNs ───────────────────────── */
+
+/** How many running PNs a reset would touch. Shown before confirming. */
+export async function runningPnCount(isCrmSelf: boolean): Promise<number> {
+  const { data, error } = await supabase
+    .rpc("running_pn_count", { p_is_crm_self: isCrmSelf });
+  if (error) {
+    // A missing function means migration 29 has not run. Report 0 so the
+    // button stays disabled rather than offering a reset that cannot work.
+    if (/does not exist|schema cache/i.test(error.message)) return 0;
+    throw error;
+  }
+  return Number(data ?? 0);
+}
+
+/**
+ * Resets the running PNs of one flow.
+ *
+ * Goes through the server route, which re-checks the CRM role before the
+ * RPC. The browser never holds elevated rights.
+ */
+export async function resetRunningPns(isCrmSelf: boolean): Promise<number> {
+  const res = await fetch("/api/reset-running", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isCrmSelf }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((body as { error?: string }).error ?? `Reset failed (${res.status}).`);
+  }
+  return Number((body as { reset?: number }).reset ?? 0);
+}

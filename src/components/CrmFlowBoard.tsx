@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import type { Campaign } from "@/types/campaign";
 import { Button, Card, Pill } from "./ui";
+import {
+  incomingFromCategoryCsv, incomingFromContentCsv, sectionFileName, downloadSection,
+} from "@/services/crmSectionExport";
 import { Icon } from "./icons";
 import { fmtDate, fmtTime } from "@/lib/format";
 import {
@@ -154,6 +157,14 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
           label: "Defaulted PN",
           rows: categoryLed.filter(isDefaulted).filter((c) => !fromCategoryCompleted(c)),
         }}
+        exportCsv={{
+          // Exactly the rows this section shows, so the count on the button
+          // and the file always agree.
+          rows: categoryLed.filter((c) =>
+            fromCategoryPending(c) || fromCategoryCompleted(c) || isDefaulted(c)),
+          build: incomingFromCategoryCsv,
+          section: "Incoming_From_Category",
+        }}
         showAll={{
           label: "Show All PN",
           rows: categoryLed.filter((c) =>
@@ -169,6 +180,11 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
         {...common}
         step={2}
         title="Incoming From Content — Category-led"
+        exportCsv={{
+          rows: categoryLed.filter((c) => fromContentPending(c, qc) || fromContentReady(c, qc)),
+          build: incomingFromContentCsv,
+          section: "Incoming_From_Content_Category_led",
+        }}
         pending={{
           label: "Pending CRM Review",
           hint: "Content submitted — CRM review pending",
@@ -293,7 +309,7 @@ interface BucketSpec {
   footer?: string;
 }
 
-function FlowSection({ step, title, pending, completed, inFlight, showAll, qc, onChanged, onOpen }: {
+function FlowSection({ step, title, pending, completed, inFlight, showAll, exportCsv, qc, onChanged, onOpen }: {
   step: number;
   title: string;
   pending: BucketSpec;
@@ -302,6 +318,12 @@ function FlowSection({ step, title, pending, completed, inFlight, showAll, qc, o
   inFlight?: { label: string; rows: Campaign[] };
   /** Opens the spreadsheet workspace for this whole section. */
   showAll?: { label: string; rows: Campaign[]; open: (rows: Campaign[]) => void };
+  /**
+   * Read-only download of this section. Disabled when the section is empty;
+   * the count is the rows actually being exported, so it always matches the
+   * file.
+   */
+  exportCsv?: { rows: Campaign[]; build: (rows: Campaign[]) => string; section: string };
   qc: QcMap;
   onChanged: () => void;
   onOpen: (id: string) => void;
@@ -315,13 +337,23 @@ function FlowSection({ step, title, pending, completed, inFlight, showAll, qc, o
           {step}
         </span>
         <h3 className="font-display text-[15px] font-600 text-heading">{title}</h3>
-        {showAll && showAll.rows.length > 0 && (
-          <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {exportCsv && (
+            <span title={exportCsv.rows.length === 0 ? "Nothing to export" : undefined}>
+            <Button size="sm" variant="ghost"
+              disabled={exportCsv.rows.length === 0}
+              onClick={() => downloadSection(
+                exportCsv.build(exportCsv.rows), sectionFileName(exportCsv.section))}>
+              Export (CSV) ({exportCsv.rows.length})
+            </Button>
+            </span>
+          )}
+          {showAll && showAll.rows.length > 0 && (
             <Button size="sm" variant="ghost" onClick={() => showAll.open(showAll.rows)}>
               {showAll.label} ({showAll.rows.length})
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       <Bucket spec={pending} tone="warning" onChanged={onChanged} onOpen={onOpen} />
       <Bucket spec={completed} tone="success" onChanged={onChanged} onOpen={onOpen} />

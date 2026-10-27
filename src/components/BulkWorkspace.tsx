@@ -160,20 +160,39 @@ const CONTENT_INPUT_COLUMNS: ColumnDef[] = [
 ];
 
 /** CRM Part 2 — what has to be filled before work goes to Content. */
+/**
+ * CRM's review of Category input ("Incoming Inputs From Category" → Show
+ * All PN). CRM-login only; the Category login's own Show All PN uses
+ * CATEGORY_INPUT_COLUMNS and is untouched.
+ *
+ * Category, Segment and Slot are what CRM uploaded, so they are read-only
+ * here. Category Brief is Category's own field and is read-only for CRM.
+ * Title Brief, Message Brief, PN Template and Creative Reqs stay editable,
+ * with the same save and submit behaviour as before.
+ *
+ * Campaign Name is removed from THIS view only — not from the data, and
+ * not from any other table.
+ */
 const CATEGORY_COLUMNS: ColumnDef[] = [
-  { key: "campaign_name", label: "Campaign Name", width: 190 },
+  { key: "launch_date", label: "Date", width: 100, type: "readonly" },
+  { key: "launch_time", label: "Time", width: 80, type: "readonly" },
+  { key: "category", label: "Category", width: 130, type: "readonly" },
+  { key: "pncc_segment_label", label: "Segment", width: 150, type: "readonly" },
+  // The RAW uploaded Slot. Never slot_type, never "Standard".
+  { key: "slot_label", label: "Slot", width: 70, type: "readonly" },
   { key: "sub_category", label: "Sub Category", width: 140 },
-  // Free text, not a brand picker: Category must be able to type any value,
-  // including several brands in one cell ("Nike, Adidas, Puma").
   { key: "brand", label: "Brand", width: 150 },
   { key: "offer", label: "Offer", width: 160 },
   { key: "landing", label: "Landing", width: 200 },
-  { key: "title_brief", label: "Title Brief", width: 200 },
-  { key: "message_brief", label: "Message Brief", width: 200 },
-  { key: "pn_template", label: "PN Template", width: 140 },
-  { key: "creative_requirements", label: "Creative Reqs", width: 190 },
   { key: "expected_cvr", label: "Exp. CVR", width: 90 },
   { key: "expected_rpv", label: "Exp. RPV", width: 90 },
+  // Category's own brief, read-only for CRM. Wrapped, never clipped.
+  { key: "brief", label: "Category Brief", width: 230, type: "readonly", longText: true },
+  // Still editable by CRM, exactly as before.
+  { key: "title_brief", label: "Title Brief", width: 220, longText: true },
+  { key: "message_brief", label: "Message Brief", width: 230, longText: true },
+  { key: "pn_template", label: "PN Template", width: 140 },
+  { key: "creative_requirements", label: "Creative Reqs", width: 200, longText: true },
 ];
 
 /** Final QC — every field CRM used to open each record to check. */
@@ -565,7 +584,7 @@ export function BulkWorkspace({
    * only the scrollbar becomes approximate, which is a far smaller problem
    * than truncation.
    */
-  const wrapRows = mode === "CONTENT_INPUT";
+  const wrapRows = mode === "CONTENT_INPUT" || mode === "CATEGORY_REVIEW";
   const NATURAL_HEIGHT_LIMIT = 400;
   const renderAll = wrapRows && visibleCampaigns.length <= NATURAL_HEIGHT_LIMIT;
 
