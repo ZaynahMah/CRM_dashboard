@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ActivityLog, Campaign, QcChecklist } from "@/types/campaign";
 import type { Profile } from "@/types/user";
 import * as api from "@/services/campaigns";
-import { fmtLongDate, fmtRelative, fmtTime, titleCase } from "@/lib/format";
+import { fmtLongDate, fmtRelative, fmtTime, titleCase, slotDisplay } from "@/lib/format";
 import {
   QC_FIELDS, qcComplete, creativeRequired, QC_NA_LABEL, stageOf,
   HEADER_LIMIT, SUB_COPY_LIMIT,
@@ -162,7 +162,9 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
             <ReadGrid rows={[
               ["Date", fmtLongDate(campaign.launch_date)],
               ["Time", fmtTime(campaign.launch_time)],
-              ["Slot", titleCase(campaign.slot_type ?? "STANDARD")],
+              // Shows the RAW uploaded Slot. This previously rendered
+              // `slot_type` ("Standard"), which is a different field.
+              ["Slot", slotDisplay(campaign)],
               ["Segment", campaign.pncc_segment_label],
               ["Category", campaign.pncc_category_code ?? campaign.category],
             ]} />

@@ -318,7 +318,10 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
       campaign_origin: "CRM_PLANNED",
       launch_date: r.day,
       launch_time: r.time,
-      slot_number: parseInt(r.slot, 10) || null,
+      // The raw uploaded value, trimmed only. "0" and "h3" survive here;
+      // the integer column below cannot hold either.
+      slot_label: (r.slot ?? "").toString().trim() || null,
+      slot_number: Number.isFinite(parseInt(r.slot, 10)) ? parseInt(r.slot, 10) : null,
       pncc_segment_label: r.segment,
       pncc_category_code: r.category,
       category: r.category,

@@ -11,7 +11,7 @@ import {
 } from "@/services/campaigns";
 import {
   type QcMap,
-  fromCategoryPending, fromCategoryCompleted,
+  fromCategoryPending, fromCategoryCompleted, isDefaulted,
   fromContentPending, fromContentReady, withContent,
   crmSelfUploadPending, crmSelfUploadCompleted, sentToContent,
 } from "@/lib/crmBuckets";
@@ -145,9 +145,19 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
           rows: categoryLed.filter(fromCategoryCompleted),
           action: sendToContent,
         }}
+        /* NEW: PNs whose own TAT passed with no Category input. They arrive
+           with the Category fields BLANK — nothing was auto-filled — and
+           CRM fills both Category and Part 2 in the same row. Completing a
+           row moves it to Completed CRM Input and it can then be sent to
+           Content as usual. */
+        inFlight={{
+          label: "Defaulted PN",
+          rows: categoryLed.filter(isDefaulted).filter((c) => !fromCategoryCompleted(c)),
+        }}
         showAll={{
           label: "Show All PN",
-          rows: categoryLed.filter((c) => fromCategoryPending(c) || fromCategoryCompleted(c)),
+          rows: categoryLed.filter((c) =>
+            fromCategoryPending(c) || fromCategoryCompleted(c) || isDefaulted(c)),
           open: (rows) => setWorkspace({
             mode: "CATEGORY_REVIEW", rows,
             run: (ids) => sendBatchToContent(ids, profileId),

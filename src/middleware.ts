@@ -22,6 +22,7 @@ const ROUTE_ROLES: Record<string, readonly string[]> = {
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   // Operational management view: CRM and leadership only.
   "/sla":         ["CRM", "EXECUTIVE"],
+  "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
   "/changes":     ["CATEGORY", "CRM"],
   "/performance": ["CRM", "EXECUTIVE"],
@@ -92,7 +93,7 @@ function redirectToLogin(req: NextRequest) {
 export const config = {
   matcher: [
     "/overview/:path*", "/campaigns/:path*", "/calendar/:path*",
-    "/emergency/:path*", "/changes/:path*", "/performance/:path*", "/sla/:path*",
+    "/emergency/:path*", "/changes/:path*", "/performance/:path*", "/sla/:path*", "/audience/:path*",
     "/segments/:path*", "/final-view/:path*", "/qc/:path*",
   ],
 };

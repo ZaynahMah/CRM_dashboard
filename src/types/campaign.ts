@@ -69,6 +69,11 @@ export interface Campaign {
   emergency_rejection_reason: string | null;
   is_crm_self: boolean;
   slot_number: number | null;
+  /** Exactly what CRM uploaded, trimmed only. Never parsed or defaulted. */
+  slot_label: string | null;
+  /** Set when this PN missed its own TAT. Per PN, never per week. */
+  defaulted_at: string | null;
+  default_reason: string | null;
 
   // Explicit finalization gate (migration 09) — Final View and the Calendar
   // page both require calendar_status === 'UPDATED', set only by CRM

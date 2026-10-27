@@ -1,0 +1,466 @@
+{
+  "_note": "Source of truth for the Audience page. Edit this file to update it; there is no database table and no upload. Values are copied verbatim from the CRM team's sheet, including spellings.",
+  "segment_directory": [
+    {
+      "segment_name": "Predom_Beauty&Groom45D_27May",
+      "base_size": "23.4K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH25 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH24 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_Eyewear45D_27May",
+      "base_size": "8.4K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH24 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH24 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_FashionJewell45D_27May",
+      "base_size": "8.5K",
+      "definition": "(Has executed Product Viewed predominantly with (L2 contains MSH2016 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 contains MSH2017 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 contains MSH2018 (case insensitive)) in the last 45 days)\nand exclude users in\n((Has executed Order Placed predominantly with (L2 contains MSH2016 (case insensitive)) in the last 7 days OR Has executed Order Placed predominantly with (L2 contains MSH2016 (case insensitive)) in the last 7 days OR Has executed Order Placed predominantly with (L2 contains MSH2018 (case insensitive)) in the last 7 days))"
+    },
+    {
+      "segment_name": "Predom_FineJewell45D_27May",
+      "base_size": "22.8K",
+      "definition": "(Has executed Product Viewed predominantly with (L2 contains MSH2010 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 contains MSH2011 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 contains MSH2012 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 contains MSH2013 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 contains MSH2015 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 contains MSH2016 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 contains MSH2018 (case insensitive)) in the last 45 days)\nand exclude users in\n((Has executed Order Placed predominantly with (L2 contains MSH2010 (case insensitive)) in the last 7 days OR Has executed Order Placed predominantly with (L2 contains MSH2011 (case insensitive)) in the last 7 days OR Has executed Order Placed predominantly with (L2 contains MSH2012 (case insensitive)) in the last 7 days OR Has executed Order Placed predominantly with (L2 contains MSH2013 (case insensitive)) in the last 7 days OR Has executed Order Placed predominantly with (L2 contains MSH2015 (case insensitive)) in the last 7 days OR Has executed Order Placed predominantly with (L2 contains MSH2016 (case insensitive)) in the last 7 days OR Has executed Order Placed predominantly with (L2 contains MSH2018 (case insensitive)) in the last 7 days))"
+    },
+    {
+      "segment_name": "Predom_Home45D_27May",
+      "base_size": "40.5K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH22 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH22 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_Kids45D_2yMay",
+      "base_size": "12.8K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH21 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH21 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_MenApparel45D_27May",
+      "base_size": "153K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH11 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH11 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_MenFW45D_27May",
+      "base_size": "192.6K",
+      "definition": "Has executed Product Viewed predominantly with (L2 contains MSH1311 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L2 contains MSH1311 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_Watches45D_27May",
+      "base_size": "49.8K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH15 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH15 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_WomenFW45D_27May",
+      "base_size": "48.3K",
+      "definition": "Has executed Product Viewed predominantly with (L2 contains MSH1310 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L2 contains MSH1310 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_WomenApparel45D_27May",
+      "base_size": "287K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH10 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH10 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_Westside45D_27May",
+      "base_size": "248.7K",
+      "definition": "Has executed Product Viewed predominantly with (Product Name contains westside (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (Product Name contains westside (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_Acc45D_27May",
+      "base_size": "52.7K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH16 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH16 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_ETX45D_27May",
+      "base_size": "25.9K",
+      "definition": "Has executed Product Viewed predominantly with (L1 contains MSH12 (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L1 contains MSH12 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Applaunch12amto2am_27may",
+      "base_size": "238.2K",
+      "definition": "Has executed App/Site Opened predominantly with (hour of the day is in [12:00 AM - 01:00 AM, 01:00 AM - 02:00 AM]) in the last 30 days"
+    },
+    {
+      "segment_name": "Applaunch10pmto12am_27may",
+      "base_size": "466.2K",
+      "definition": "Has executed App/Site Opened predominantly with (hour of the day is in [10:00 PM - 11:00 PM, 11:00 PM - 12:00 AM]) in the last 30 days"
+    },
+    {
+      "segment_name": "Applaunch5am8am_27may",
+      "base_size": "222.2K",
+      "definition": "Has executed App/Site Opened predominantly with (hour of the day is in [05:00 AM - 06:00 AM, 06:00 AM - 07:00 AM, 07:00 AM - 08:00 AM]) in the last 30 days"
+    },
+    {
+      "segment_name": "Push_WomenSeg1_06June25",
+      "base_size": "595.3K",
+      "definition": "(Gender is in [FEMALE] (case insensitive) OR predicted_gender is in [FEMALE] (case insensitive) OR Has executed Order Placed atleast 1 time after Jan 01, 2021 with attributes (L2 (any_of) contains MSh1310 (case insensitive) OR L1 (any_of) contains MSH10 (case insensitive) OR L1 (any_of) contains MSH20 (case insensitive) OR L1 (any_of) contains MSH25 (case insensitive) OR L1 (any_of) contains MSH24 (case insensitive) OR L1 (any_of) contains MSH21 (case insensitive) OR L1 (any_of) is in [MSH22] (case insensitive) OR L2 (any_of) is in [MSH1501] (case insensitive) OR historicshopper_l1_code (any_of) is in [MSH10, MSH20, MSH25, MSH24, MSH21, MSH22] (case insensitive) OR historicshopper_l2_code (any_of) is in [MSH1501, MSH1310] (case insensitive)) OR Has executed Product Viewed predominantly with (L1 is MSH10 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L1 is MSH20 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L1 is MSH25 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L1 is MSH24 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L1 is MSH21 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L1 is MSH22 (case insensitive)) in the last 45 days OR Has executed Product Viewed predominantly with (L2 is MSH1501 (case insensitive)) in the last 45 days)"
+    },
+    {
+      "segment_name": "Push_MenSeg_06June25",
+      "base_size": "1.6M",
+      "definition": "(Has executed App/Site Opened atleast 1 time in the last 45 days OR Has executed Order Placed atleast 1 time after Jan 01, 2021)"
+    },
+    {
+      "segment_name": "Predom_WomAcc45D_30JAN",
+      "base_size": "41K",
+      "definition": "Has executed Product Viewed predominantly with (L2 is in [MSH1600, MSH1601, MSH1603, MSH1602, MSH1604] (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L2 is MSH1600 (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Predom_MenAcc45D_30JAN",
+      "base_size": "29.6K",
+      "definition": "Has executed Product Viewed predominantly with (L2 is in [MSH1604, MSH1605, MSH1606] (case insensitive)) in the last 45 days\nand exclude users in\n(Has executed Order Placed predominantly with (L2 is in [MSH1604] (case insensitive)) in the last 7 days)"
+    },
+    {
+      "segment_name": "Search_Watch_16Sep",
+      "base_size": "59K",
+      "definition": "Has executed User Search atleast 1 time in the last 90 days with attributes (Search Term contains any of [watch] (case insensitive))"
+    },
+    {
+      "segment_name": "Search_ethnic_16Sep",
+      "base_size": "23.3K",
+      "definition": "Has executed User Search atleast 1 time in the last 90 days with attributes (Search Term contains any of [ethnic] (case insensitive))"
+    },
+    {
+      "segment_name": "search_kids_040825",
+      "base_size": "20.3K",
+      "definition": "Has executed User Search atleast 1 time in the last 90 days with attributes (Search Term contains any of [kids] (case insensitive))"
+    },
+    {
+      "segment_name": "Search_Watches",
+      "base_size": "3.4K",
+      "definition": "Has executed User Search atleast 1 time in the last 45 days with attributes (Search Term is in [Watches] (case insensitive))"
+    },
+    {
+      "segment_name": "Search_Sports",
+      "base_size": "4.2K",
+      "definition": "Has executed User Search atleast 1 time in the last 30 days with attributes (Search Term contains any of [sports shoes for men, sports shoes, shorts men sports, Sports shoes, puma motorsport shoes mens, puma sports shoe men, sports shoes for women, techno sport tshirt, puma motorsport, puma motorsport tshirt, sports jacket, sports shoes for boys, Sports t shirts, Sports jacket, killer sports shoes, puma jackets sports, soup bowl with spoon, sports jackets, sports sandals, technosport track pant, women sport shoe women, woodland sports shoe men, 3/4th tights sports women, Adidas sports shoes, Puma men sport shoes, Sports wear for men, Van heusen sports bra, adidas kids sport shoe, puma mensvm sport, puma sports tops, sport running shoes women, sport t shirt, sports shoes for hiking, sports shoes for men red tape, sports tites shery for men, sports wear track pant men, techno sports shorts, Domyos by Decathlon Black Slim Fit Sports Joggers, Red colour sports shoe, Women sport shoes, acne spot treatment, men track sport wear, mochi men sports shoe, shoes for men sports, sports full t shirt for men, sports high neck full sleeve t shirts, sports t-shirt men, sportswear] (case insensitive) OR Search Term contains any of [active, active wear women, activewear] (case insensitive))"
+    },
+    {
+      "segment_name": "Search_Accessories",
+      "base_size": "23.1K",
+      "definition": "Has executed User Search atleast 1 time in the last 60 days with attributes (Search Term contains any of [hand, handbags, handbag, hand bags, caprese hand bags, hand bags lavie luxe, lavie signature hand bags, Handkerchief, lino perros hand bags, hand wash, handkerchief men, hand bag, hand bags lavie, hand grip, Handbags for women, handbag women, Emporio armani handbags, Guess hand bags, Hand towel, Tommy hilfiger handbags, Van heusen handbags, Woman handbags, Women handbags, allen solly women handbag, guess hand bags, hand bags accessorize london, hand bags fastrack, Lavie handbag, Sonata hand watch ladies, Zippo Silver Dead Mans Hand Emblem Design Brass Pocket Lighter, aldo hand bags, exotic handbag, gym hand gloves men, gym hand grip, hand bags fastrack daily, hand bags lavie signature, handbag women bags, miraggio handbags, Ck handbags, Guess women hand bags, Handbag women, Handwash, Loci tame hand cream, Philips hand blender, Soup bowl with handle, code handbag, gym hand gloves, hand cut chip, handbag Jain stories, handbag tourist man man, handloom bags, mens hand bag] (case insensitive) OR Search Term contains any of [leather ba, leather bags laptop men, leather bagpacks men] (case insensitive) OR Search Term contains any of [lugg, luggage bags, luggage bags combo, luggage trolley bags safari, small luggage bags, It luggage set, Polycarbonate luggage, luggage bags for women, luggage bags under2000] (case insensitive) OR Search Term contains any of [acc, men accessories, Westside accessories, Bacca bucci, baby hair accessories, watch strap in accessories, hand bags accessorize london, Accessories Westside's, Accessorize London Women's Multi Webbing Strap Zip Phone Bag, Suit accessories, shoes red bacca bucci, triumph beige accessories casual, women accessories, Kitchen accessories, Vaccum robot, wrist watch accessary] (case insensitive) OR Search Term contains any of [wallet, Tommy Hilfiger wallet, Wallet for men, men wallet, wallet women, credit card wallet, guess women wallet, wallets fossil, Wallet titan, da milano wallet, lacoste men wallets, mini wallet for men, provogue wallet, puma wallets black, wildcraft wallets for men, wallet holder, wallet with money clip] (case insensitive) OR Search Term contains any of [belts, belts for men, Belts for men] (case insensitive))"
+    },
+    {
+      "segment_name": "Search_Acc_Tote_250925",
+      "base_size": "4.2K",
+      "definition": "Has executed User Search atleast 1 time in the last 90 days with attributes (Search Term contains any of [tote] (case insensitive))"
+    },
+    {
+      "segment_name": "Search_Winterwear",
+      "base_size": "5.5K",
+      "definition": "Has executed User Search atleast 1 time in the last 60 days with attributes (Search Term contains any of [winter jacket for men, wind cheater mens, winter jackets for men, westside winter wear women, winter sweatshirt women, winter jackets for women, winter jacket for women, winter wear for women, winter hoodie for men, jackets men winter, Winter dress, wine glass set, winter jacket with cap for baby girl, winterwear, Winter shoes, puma wind cheater, winter jacket men, winter kurtas for women, Winter kurta, Women winter wear, pantaloons baby winter, winter collection, winter jacket, winter shoes for men, winter sweatshirt men, Walking shoe women dor winter, Women cord set winter, gia winter tops, vintage winter shirts, winter sweatershirt and huddies for man, winter ware woman, winter women jacket, DECATHLON UPPER FOR WINTER, Kids winter wear, Mens winter jacket, Winter jacket for womens, Winter poli, cardigan for women for winter, puma winter coats and jackets women, slipper winter, track pant & Full sleeves winter wear ladies, winter dress for men, winter lower for men, winter t-shirts, winter trousers go colors, winter wear shirt] (case insensitive) OR Search Term contains any of [full sleeve shirt men, full tshirt men, full sleeve tshirt, full sleeve tshirt women, Full sleeve polo, mens full sleeve tshirts, monte carlo full sleeve tshirt men, Adidas full sleeves tshirt for men, full sleeve bomber, men cotton shirts full sleeves, men full sleeve tshirt under 500, t shirt full sleeve red tape, tommy hilfiger tshirt full sleeve, uspa full sleeve men, Full sleeve cotton t shirt women, Full sleeve polo men, Full sleeve tshirt men, boy fullsleeves tshirt, full sleeve white crop top, full sleeves tshirt for woman, full tshirt men collar, polo tshirt men full, polo tshirt men full sleeve, track pant & Full sleeves winter wear ladies, velvet full sleeves tops kidsdew, women tshirt Full sleeve] (case insensitive) OR Search Term contains any of [neck warmer, warm sweatshirts for men] (case insensitive) OR Search Term contains any of [sweatshirts for men, sweatshirts for women, sweaters for women, sweatshirt, Sweater, winter sweatshirt women, adidas sweatshirt men, women sweater, Sweatshirt for men, sweater for women, Men sweatshirt, Sweatshirt men, nike sweatshirt for men, Women sweater, half zipper sweatshirt, American eagle sweater, levis sweatshirts men, sweatshirt for women, Adidas sweatshirt men, mens sleeveless sweater, sweater for men, sweatpant men, Adidas sweatshirt, gap sweatshirt, uspa sweatshirt men, Sweaters men, front zip sweatshirt, high neck sweater women, Gap sweatshirt women, Levis sweatshirt men, boys sweaters, gap men sweatshirt, half sweater men, mens formal sweater, mens turtle neck sweater, superdry sweatshirt, united colour benetton sweater, winter sweatshirt men, Gia sweatshirt, Nike sweatshirt men, Sweater dress, Sweatshirts women, Women sweat shirts, green sweatshirt women, henley sweatshirt men, hop boys sweatshirt, men half zipper sweater, only sweater, red sweater women, winter sweatershirt and huddies for man, women sweater cardigans, Black sweater high neck for women, Men front zip sweater, The souled store sweatshirt, baby boy sweater, black plain sweater stylii, boys sweat3r, celio sweater, noum sweatshirt, red tape half sweater, van heusen men sweatshirts, van heusen red sweatshirts, warm sweatshirts for men, woollen sweater men] (case insensitive))"
+    },
+    {
+      "segment_name": "High Value Customers",
+      "base_size": "21K",
+      "definition": "(average_order_value is greater than 5999 AND Has executed Order Placed atleast 3 times after Oct 08, 2018 AND Has not executed Order Placed after Oct 08, 2018 with attributes (Product Name (any_of) contains westside (case insensitive)))"
+    },
+    {
+      "segment_name": "Westside Exclusive Shoppers",
+      "base_size": "41.5K",
+      "definition": "(Has executed Order Placed atleast 3 times after Oct 08, 2018 AND Has executed Order Placed for the last time after Oct 08, 2018 with attributes (Product Name (any_of) contains westside (case insensitive)) AND Has not executed Order Placed in the last 3 months)"
+    },
+    {
+      "segment_name": "Westside Dormant",
+      "base_size": "430.3K",
+      "definition": "(Has executed Product Viewed atleast 1 time in the last 6 months with attributes (Product Name contains any of [westside] (case insensitive)) AND Has not executed Order Placed in the last 6 months)"
+    },
+    {
+      "segment_name": "One Time Westside purchaser",
+      "base_size": "46K",
+      "definition": "Has executed Order Placed exactly 1 time after Oct 08, 2018 with attributes (Product Name (any_of) contains westside (case insensitive))"
+    },
+    {
+      "segment_name": "Two time westside purchasers",
+      "base_size": "20K",
+      "definition": "Has executed Order Placed exactly 2 times after Oct 08, 2018 with attributes (Product Name (any_of) contains westside (case insensitive))"
+    },
+    {
+      "segment_name": "More than 5 time Westside shopper",
+      "base_size": "19.1K",
+      "definition": "Has executed Order Placed atleast 5 times after Oct 08, 2018 with attributes (Product Name (any_of) contains westside (case insensitive))"
+    },
+    {
+      "segment_name": "M0_27Feb2026",
+      "base_size": "935",
+      "definition": "Has executed Order Placed atleast 1 time in this month"
+    },
+    {
+      "segment_name": "M1-2_Feb27",
+      "base_size": "102.6K",
+      "definition": "Has executed Order Confirmed atleast 1 time between 30 to 90 days ago"
+    },
+    {
+      "segment_name": "M2-M6_Feb27",
+      "base_size": "158.9K",
+      "definition": "Has executed Order Confirmed atleast 1 time between 90 to 180 days ago"
+    },
+    {
+      "segment_name": "M6+Feb27",
+      "base_size": "491.7K",
+      "definition": "Has executed Order Placed atleast 1 time before 180 days ago"
+    },
+    {
+      "segment_name": "INB_Feb27",
+      "base_size": "1.5M",
+      "definition": "(Install Status is True AND Has not executed Order Confirmed before 1 days ago)"
+    },
+    {
+      "segment_name": "HighHOVandroid_Feb2026",
+      "base_size": "170.9K",
+      "definition": "(Has executed Order Placed atleast 1 time before Dec 31, 2027 with attributes (Order Total is greater than 3500 OR historicshopper_gmv is greater than 3500) AND Has executed App/Site Opened atleast 1 time before Dec 31, 2027 with attributes (Platform is in [ANDROID] (case insensitive)))"
+    },
+    {
+      "segment_name": "HIghHOV_IOS_Feb2026",
+      "base_size": "83.3K",
+      "definition": "(Has executed Order Placed atleast 1 time before Dec 31, 2027 with attributes (Order Total is greater than 3500 OR historicshopper_gmv is greater than 3500) AND Has executed App/Site Opened atleast 1 time before Dec 31, 2027 with attributes (Platform is in [iOS] (case insensitive)))"
+    },
+    {
+      "segment_name": "Rest_LOW_AOV_Android",
+      "base_size": "275.2K",
+      "definition": "All Users\nand exclude users in\n((Users in custom segment: INB_Feb27 OR Users in custom segment: HighHOVandroid_Feb2026))"
+    },
+    {
+      "segment_name": "Rest_LOW_AOV_Ios",
+      "base_size": "330.9K",
+      "definition": "All Users\nand exclude users in\n((Users in custom segment: INB_Feb27 OR Users in custom segment: HIghHOV_IOS_Feb2026))"
+    },
+    {
+      "segment_name": "M0-M2_Feb2026",
+      "base_size": "112.1K",
+      "definition": "Users in custom segment: M0-M2_Feb2026\nand exclude users in\n((Users in custom segment: Notification_click_12hrs OR Users in custom segment: Tatainternal_Jan2026 OR Users in custom segment: order_placed_last7days))"
+    },
+    {
+      "segment_name": "M3-M6_Feb26",
+      "base_size": "199.1K",
+      "definition": "Has executed Order Placed atleast 1 time between 90 to 210 days ago"
+    },
+    {
+      "segment_name": "INB_ANDROID_Feb27",
+      "base_size": "414.7K",
+      "definition": "(Install Status is True AND Has executed User installs the app atleast 1 time before Dec 30, 2027 with attributes (Platform is in [ANDROID] (case insensitive)))\nand exclude users in\n(Has executed Order Placed atleast 1 time before Dec 27, 2027)"
+    },
+    {
+      "segment_name": "INB_IOS_Feb27",
+      "base_size": "107.1K",
+      "definition": "(Install Status is True AND Has executed User installs the app atleast 1 time before Dec 30, 2027 with attributes (Platform is in [iOS] (case insensitive)))\nand exclude users in\n(Has executed Order Placed atleast 1 time before Dec 27, 2027)"
+    },
+    {
+      "segment_name": "M12+Feb2026",
+      "base_size": "408.5K",
+      "definition": "Has executed Order Placed atleast 1 time before 390 days ago"
+    },
+    {
+      "segment_name": "M7-M12_Feb2026",
+      "base_size": "225.6K",
+      "definition": "Has executed Order Placed atleast 1 time between 210 to 390 days ago"
+    },
+    {
+      "segment_name": "Men_Overall_080626",
+      "base_size": "1205381",
+      "definition": "All Users\nand exclude users in\n((Users in custom segment: Push_WomenSeg1_06June25 OR Users in custom segment: Men2_020626))"
+    }
+  ],
+  "tc_segments": [
+    {
+      "segment": "Active Repeat Women",
+      "segment_name_in_tc": "ActRpt_Wom_10July26"
+    },
+    {
+      "segment": "Active Repeat Rest",
+      "segment_name_in_tc": "ActRpt_Rest_10July26"
+    },
+    {
+      "segment": "Active Repeat Men",
+      "segment_name_in_tc": "ActRpt_Men_10July26"
+    },
+    {
+      "segment": "Repeat Women",
+      "segment_name_in_tc": "Rep_Wom_10July26"
+    },
+    {
+      "segment": "Repeat Rest",
+      "segment_name_in_tc": "Rep_Rest_10July26"
+    },
+    {
+      "segment": "Repeat Men",
+      "segment_name_in_tc": "Rep_Men_10July26"
+    },
+    {
+      "segment": "RingFence Women",
+      "segment_name_in_tc": "RFRep_Wom_10July26"
+    },
+    {
+      "segment": "RingFence Rest",
+      "segment_name_in_tc": "RFRep_Rest_10July26"
+    },
+    {
+      "segment": "RF Men",
+      "segment_name_in_tc": "RFRep_Men_10July26"
+    },
+    {
+      "segment": "Dormant Women",
+      "segment_name_in_tc": "Drmnt_Wom_10July26"
+    },
+    {
+      "segment": "Dormant",
+      "segment_name_in_tc": "Drmnt_Rest_10July26"
+    },
+    {
+      "segment": "Dormant Men",
+      "segment_name_in_tc": "Drmnt_Men_10July26"
+    },
+    {
+      "segment": "INB Women",
+      "segment_name_in_tc": "INB_Wom_10July26"
+    },
+    {
+      "segment": "INB Rest",
+      "segment_name_in_tc": "INB_Rest_10July26"
+    },
+    {
+      "segment": "INB Men",
+      "segment_name_in_tc": "INB_Men_10July26"
+    },
+    {
+      "segment": "INB",
+      "segment_name_in_tc": "INB_10July26"
+    },
+    {
+      "segment": "Active",
+      "segment_name_in_tc": "Active_M1toM3_10July26"
+    },
+    {
+      "segment": "Active Women",
+      "segment_name_in_tc": "Active_Wom_10July26"
+    },
+    {
+      "segment": "Active Men",
+      "segment_name_in_tc": "Active_Men_10July26"
+    },
+    {
+      "segment": "repeat",
+      "segment_name_in_tc": "Repeat_M4toM6_10July26"
+    },
+    {
+      "segment": "RF + Dormant",
+      "segment_name_in_tc": "RF_Drmnt_10July26"
+    },
+    {
+      "segment": "Shopper",
+      "segment_name_in_tc": "Shopper_10July26"
+    },
+    {
+      "segment": "Shopper Women",
+      "segment_name_in_tc": "Shopper_Wom_10July26"
+    },
+    {
+      "segment": "Shopper Men",
+      "segment_name_in_tc": "Shopper_Men_10July26"
+    },
+    {
+      "segment": "Non Shopper",
+      "segment_name_in_tc": "Non_Shopper_10July26"
+    },
+    {
+      "segment": "Non Shopper Women",
+      "segment_name_in_tc": "NonShopper_Wom_10July26"
+    },
+    {
+      "segment": "Non Shopper Men",
+      "segment_name_in_tc": "NonShopper_Men_10July26"
+    },
+    {
+      "segment": "Women",
+      "segment_name_in_tc": "Push_Women_10July26"
+    },
+    {
+      "segment": "Men",
+      "segment_name_in_tc": "Push_Men_10July26"
+    },
+    {
+      "segment": "HNI",
+      "segment_name_in_tc": "Fashion_HNI_300626"
+    },
+    {
+      "segment": "CliqCash between 49 to 2000",
+      "segment_name_in_tc": "Cliq_Cash_49to2000_PN_130826"
+    }
+  ],
+  "cohort_definitions": {
+    "push": {
+      "title": "Segment Definition (Push)",
+      "rows": [
+        {
+          "cohort": "Active",
+          "months": "M1-M3"
+        },
+        {
+          "cohort": "Repeat",
+          "months": "M4-M6"
+        },
+        {
+          "cohort": "RF",
+          "months": "M7-M9"
+        },
+        {
+          "cohort": "Dormant",
+          "months": "M10+"
+        }
+      ]
+    },
+    "in_app": {
+      "title": "Segment Definition for In-App",
+      "rows": [
+        {
+          "cohort": "New",
+          "months": "M0"
+        },
+        {
+          "cohort": "Active Repeat",
+          "months": "M1-M6"
+        },
+        {
+          "cohort": "Repeat",
+          "months": "M4-M12"
+        },
+        {
+          "cohort": "Dormant",
+          "months": "M12+"
+        }
+      ]
+    },
+    "combination_segments": [
+      "Active",
+      "Repeat",
+      "RF + Dormant",
+      "INB",
+      "Active Women",
+      "Active Men",
+      "Repeat Women",
+      "Repeat Men",
+      "RF Women",
+      "RF Men",
+      "Dormant Women",
+      "Dormant Men",
+      "INB Women",
+      "INB Men",
+      "Shopper",
+      "Non Shopper",
+      "Shopper Women",
+      "Shopper Men",
+      "Non Shopper Women",
+      "Non Shopper Men"
+    ],
+    "custom_segments": [
+      "Women",
+      "Men",
+      "Rest of Base",
+      "HNI",
+      "Fullbase"
+    ],
+    "data_segments": [
+      "Rest of the Base",
+      "Predom_Beauty&Groom45D_27May",
+      "Predom_FineJewell45D_27May",
+      "Predom_Home45D_27May",
+      "Search_Sports"
+    ]
+  }
+}

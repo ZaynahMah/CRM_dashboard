@@ -51,6 +51,17 @@ export const withContent = (c: Campaign) =>
 
 /* ============ 1. Incoming Inputs From Category (Category-led only) ============ */
 
+/**
+ * A PN that missed its own TAT. Per PN, never per week — this is the ONE
+ * definition of "defaulted" in the app. The old Day 0/1/2/3 week ladder is
+ * gone (migration 28).
+ */
+export const isDefaulted = (c: Campaign) => Boolean(c.defaulted_at);
+
+/** Category may no longer edit a defaulted PN; it belongs to CRM now. */
+export const categoryReadOnly = (c: Campaign) =>
+  isDefaulted(c) || c.category_status === "LOCKED" || c.category_status === "SUBMITTED";
+
 export const fromCategoryPending = (c: Campaign) =>
   c.category_status === "LOCKED" && !part2Complete(c)
   && c.content_status === "NOT_ASSIGNED";
@@ -144,8 +155,11 @@ export function visibleSections(c: Campaign, qc: QcMap): string[] {
     if (crmSelfUploadCompleted(c)) out.push("crmself:upload/complete");
     if (sentToContent(c)) out.push("crmself:sent-to-content");
   } else {
-    if (fromCategoryPending(c)) out.push("category/pending");
-    if (fromCategoryCompleted(c)) out.push("category/complete");
+    // Defaulted PNs are CRM's to fill, and must appear in exactly one
+    // place: their own section, not also under Pending CRM Input.
+    if (isDefaulted(c) && !part2Complete(c)) out.push("category/defaulted");
+    else if (fromCategoryPending(c)) out.push("category/pending");
+    else if (fromCategoryCompleted(c)) out.push("category/complete");
     // Category-led rows not yet locked belong to Category's own queue.
     if (c.category_status !== "LOCKED") out.push("category:queue");
   }
@@ -169,8 +183,11 @@ export function actionableSections(c: Campaign, qc: QcMap): string[] {
     // sentToContent is deliberately absent: it is a read-only record of
     // what CRM handed over, not a section offering an action.
   } else {
-    if (fromCategoryPending(c)) out.push("category/pending");
-    if (fromCategoryCompleted(c)) out.push("category/complete");
+    // Defaulted PNs are CRM's to fill, and must appear in exactly one
+    // place: their own section, not also under Pending CRM Input.
+    if (isDefaulted(c) && !part2Complete(c)) out.push("category/defaulted");
+    else if (fromCategoryPending(c)) out.push("category/pending");
+    else if (fromCategoryCompleted(c)) out.push("category/complete");
   }
   if (fromContentPending(c, qc)) out.push("content/pending");
   if (fromContentReady(c, qc)) out.push("content/ready");

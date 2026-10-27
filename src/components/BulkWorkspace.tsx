@@ -7,7 +7,10 @@ import {
   buildFromCampaign, suggestTrackingFields, buildLandingPlusTracking,
   shouldGenerate, trackingCheck,
 } from "@/lib/trackingCode";
-import { fmtDate, fmtTime } from "@/lib/format";
+import { fmtDate, fmtTime, slotDisplay } from "@/lib/format";
+import {
+  pnDeadlineDate, timeLeftLabel, deadlinePassed, deadlineImminent,
+} from "@/lib/deadlines";
 import { Button, Pill } from "./ui";
 import {
   CAMPAIGN_CATEGORY_FILTER_OPTIONS, ALL_CATEGORIES_LABEL, filterByCategory,
@@ -40,6 +43,33 @@ import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
  */
 const WRITE_BATCH_SIZE = 500;
 
+/**
+ * The Deadline cell. Shows the date plus a live countdown, ambers under 24
+ * hours, and reads Submitted or Defaulted once those are settled.
+ */
+function DeadlineCell({ campaign, now }: { campaign: Campaign; now: Date }) {
+  const submitted = campaign.category_status === "LOCKED"
+    || campaign.category_status === "SUBMITTED";
+  if (submitted) {
+    return <span className="block px-2 py-1.5 text-[12.5px] text-success-700">Submitted</span>;
+  }
+  if (campaign.defaulted_at || deadlinePassed(campaign.launch_date, now)) {
+    return <span className="block px-2 py-1.5 text-[12.5px] font-medium text-danger-700">Defaulted</span>;
+  }
+  const due = pnDeadlineDate(campaign.launch_date);
+  const left = timeLeftLabel(campaign.launch_date, now);
+  if (!due || !left) {
+    return <span className="block px-2 py-1.5 text-[12.5px] text-muted">—</span>;
+  }
+  const soon = deadlineImminent(campaign.launch_date, now);
+  return (
+    <span className={`block px-2 py-1.5 text-[12.5px] ${
+      soon ? "font-medium text-warning-700" : "text-muted"}`}>
+      {fmtDate(due)} · {left}
+    </span>
+  );
+}
+
 /** Fixed row height, in px, that the virtualizer's arithmetic depends on. */
 const ROW_HEIGHT = 33;
 
@@ -63,7 +93,7 @@ interface ColumnDef {
   key: keyof Campaign;
   label: string;
   width: number;
-  type?: "text" | "bool" | "brand" | "readonly" | "select";
+  type?: "text" | "bool" | "brand" | "readonly" | "select" | "deadline";
   /** Allowed values when type is "select". */
   options?: readonly string[];
   /**
@@ -83,13 +113,15 @@ interface ColumnDef {
 
 /** What Category fills in. Mirrors categoryValidation's mandatory set. */
 const CATEGORY_INPUT_COLUMNS: ColumnDef[] = [
+  // Deadline FIRST: it is the thing Category must act on.
+  { key: "launch_date", label: "Deadline", width: 150, type: "deadline" },
   // The original CRM/category input context, read-only: Category needs to
   // see what it is writing against. Date and Time are SEPARATE columns —
   // the sticky left block already shows a combined "Date / Time", and a
   // combined cell cannot be read or scanned per field.
   { key: "launch_date", label: "Date", width: 100, type: "readonly" },
   { key: "launch_time", label: "Time", width: 80, type: "readonly" },
-  { key: "slot_number", label: "Slot", width: 64, type: "readonly" },
+  { key: "slot_label", label: "Slot", width: 64, type: "readonly" },
   { key: "pncc_segment_label", label: "Segment", width: 150, type: "readonly" },
   { key: "category", label: "Category", width: 130, type: "readonly" },
   { key: "campaign_name", label: "Campaign Name", width: 190, type: "readonly" },
@@ -224,6 +256,15 @@ export function BulkWorkspace({
    * `visibleCampaigns` for why selection is pruned alongside it.
    */
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES_LABEL);
+  /**
+   * Ticks every minute so the "2d 5h left" countdowns stay live without a
+   * reload. One timer for the whole grid, not one per row.
+   */
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const [fillKey, setFillKey] = useState<string>("");
   const [fillValue, setFillValue] = useState<string>("");
 
@@ -305,6 +346,7 @@ export function BulkWorkspace({
   const contextValue = useCallback((c: Campaign, key: keyof Campaign): string => {
     if (key === "launch_date") return c.launch_date ? fmtDate(c.launch_date) : "—";
     if (key === "launch_time") return c.launch_time ? fmtTime(c.launch_time) : "—";
+    if (key === "slot_label") return slotDisplay(c);
     const raw = c[key];
     if (raw === null || raw === undefined || String(raw).trim() === "") return "—";
     return String(raw);
@@ -813,6 +855,8 @@ export function BulkWorkspace({
                             <option key={o} value={o}>{col.labels?.[o] ?? o}</option>
                           ))}
                         </select>
+                      ) : col.type === "deadline" ? (
+                        <DeadlineCell campaign={c} now={now} />
                       ) : col.fixed ? (
                         /* Fixed value, displayed read-only. It still feeds the
                            generator; CRM never types or picks it. */

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Campaign } from "@/types/campaign";
+import { slotDisplay } from "@/lib/format";
 
 /**
  * Export campaigns to a downloadable CSV (opens fine in Excel; a native
@@ -47,7 +48,8 @@ export function campaignsToCSV(campaigns: Campaign[]): string {
     const vals: (string | number | boolean | null)[] = [
       c.launch_date ?? "",
       fmtTime12(c.launch_time),
-      c.slot_type ?? "STANDARD",
+      // The Slot column carries the RAW uploaded Slot.
+      slotDisplay(c),
       c.pncc_segment_label ?? c.audience ?? "",
       c.pncc_category_code ?? c.category ?? "",
       c.sub_category ?? "",

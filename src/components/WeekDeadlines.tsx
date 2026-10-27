@@ -3,8 +3,9 @@
 import { useMemo } from "react";
 import type { Campaign } from "@/types/campaign";
 import { Pill } from "./ui";
-import { fmtDate, isoDate, toDate } from "@/lib/format";
-import { categoryDeadlineForWeek } from "@/lib/businessWeeks";
+import { fmtDate, isoDate, toDate, today } from "@/lib/format";
+import { weekDeadlineRange } from "@/lib/deadlines";
+import { isDefaulted } from "@/lib/crmBuckets";
 import { inWeek, dedupeById } from "@/lib/campaignDate";
 import { planningWindow, planningWeeks, withinPlanningWindow } from "@/lib/planningWindow";
 
@@ -12,7 +13,7 @@ interface WeekBlock {
   weekLabel: string;
   weekStart: string;
   weekEnd: string;
-  deadline: string;
+  deadline: { first: string; last: string } | null;
   campaigns: Campaign[];
   status: "Completed" | "In Progress" | "Pending";
 }
@@ -47,6 +48,7 @@ export function WeekDeadlines({ campaigns, monthStart }: {
      * Week buckets are generated FROM the window, so the count follows the
      * dates rather than a hard-coded number.
      */
+    const todayIso = isoDate(today());
     const win = planningWindow(monthStart);
     const windowRows = withinPlanningWindow(rows, win);
     const monthHasData = windowRows.length > 0;
@@ -72,11 +74,16 @@ export function WeekDeadlines({ campaigns, monthStart }: {
       else if (filled < total) status = "In Progress";
       else status = "Completed";
 
+      // (d) Only weeks that have not finished: end date today or later.
+      // This hides rows; nothing is deleted or archived.
+      if (week.end < todayIso) continue;
+
       blocks.push({
         weekLabel: week.label,
         weekStart: week.start,
         weekEnd: week.end,
-        deadline: categoryDeadlineForWeek(week.start),
+        // (b) Deadlines are per PN, so a week shows the RANGE its PNs span.
+        deadline: weekDeadlineRange(weekCampaigns.map((c) => c.launch_date)),
         campaigns: weekCampaigns,
         status,
       });
@@ -90,8 +97,8 @@ export function WeekDeadlines({ campaigns, monthStart }: {
   return (
     <div className="rounded-xl border border-line bg-surface shadow-card">
       <div className="border-b border-line px-5 py-3.5">
-        <div className="text-[14px] font-600 text-heading">Category submission deadlines</div>
-        <div className="mt-0.5 text-micro text-faint">Category must submit inputs one week before each campaign week</div>
+        <div className="text-[14px] font-600 text-heading">Deadlines for submission</div>
+        <div className="mt-0.5 text-micro text-faint">Each PN is due 7 days before its campaign date.</div>
       </div>
       <table>
         <thead>
@@ -100,18 +107,29 @@ export function WeekDeadlines({ campaigns, monthStart }: {
             <th>Category deadline</th>
             <th>Campaigns</th>
             <th>Filled</th>
+            <th>Defaulted</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody>
           {weeks.map((w) => {
             const filled = w.campaigns.filter((c) => c.brand && c.offer).length;
+            const defaulted = w.campaigns.filter(isDefaulted).length;
             return (
               <tr key={w.weekStart}>
                 <td className="font-medium text-heading">{w.weekLabel}</td>
-                <td className="text-muted">{fmtDate(w.deadline)}</td>
+                <td className="whitespace-nowrap text-muted">
+                  {w.deadline
+                    ? w.deadline.first === w.deadline.last
+                      ? fmtDate(w.deadline.first)
+                      : `${fmtDate(w.deadline.first)} – ${fmtDate(w.deadline.last)}`
+                    : "—"}
+                </td>
                 <td className="text-muted">{w.campaigns.length}</td>
                 <td className="text-muted">{filled} / {w.campaigns.length}</td>
+                <td className={defaulted > 0 ? "font-medium text-danger-700" : "text-muted"}>
+                  {defaulted}
+                </td>
                 <td><Pill label={w.status} tone={tones[w.status]} /></td>
               </tr>
             );

@@ -84,3 +84,19 @@ export function weekLabel(mondayIso: string): string {
   if (diff === -1) return "Last week";
   return fmtWeekRange(mondayIso);
 }
+
+/**
+ * The Slot to SHOW: the raw uploaded label, falling back to the parsed
+ * number only for rows saved before slot_label existed.
+ *
+ * Never shows slot_type — that is a different field (STANDARD/ADDITIONAL),
+ * and showing it in a "Slot" column is the bug this replaces.
+ */
+export const slotDisplay = (
+  c: { slot_label?: string | null; slot_number?: number | null }
+): string => {
+  const raw = (c.slot_label ?? "").trim();
+  if (raw) return raw;
+  return c.slot_number !== null && c.slot_number !== undefined
+    ? String(c.slot_number) : "—";
+};

@@ -33,6 +33,7 @@ export const ROUTE_ROLES: Record<string, readonly AppRole[]> = {
   "/campaigns":   ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/sla":         ["CRM", "EXECUTIVE"],
+  "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
   "/changes":     ["CATEGORY", "CRM"],
   "/performance": ["CRM", "EXECUTIVE"],
