@@ -21,6 +21,10 @@ import { markRowDirty, isRowDirty, onDashboardReset } from "./useCampaigns";
 import { SearchSelect } from "./SearchSelect";
 import masterData from "@/data/masterData.json";
 import { CHANNEL_FORMATS, LANDING_VALUES } from "@/lib/trackingMasters";
+import {
+  optionsFor, subcategoriesFor, isSubcategoryValid, isOffList,
+  BULK_FILL_KEYS, isValidNewBrandCode,
+} from "@/lib/pnDropdowns";
 import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 
 /**
@@ -70,6 +74,66 @@ function DeadlineCell({ campaign, now }: { campaign: Campaign; now: Date }) {
   );
 }
 
+/**
+ * A tracking dropdown cell.
+ *
+ * Handles the three behaviours the plain <select> could not: a dependent
+ * sub-category list, type-to-filter for long lists, and showing a stored
+ * value that is no longer in the option list instead of wiping it.
+ */
+function TrackingCell({ col, campaign, value, onPick }: {
+  col: ColumnDef; campaign: Campaign; value: string;
+  onPick: (v: string) => void;
+}) {
+  // Sub-category options come from the row's own category code.
+  const categoryCode = (campaign.tracking_category ?? "").toString().trim();
+  const dependent = col.dependsOnCategoryCode === true;
+  const opts = dependent ? subcategoriesFor(categoryCode) : (col.options ?? []);
+  const locked = dependent && categoryCode === "";
+  const offList = isOffList(String(col.key), value);
+
+  if (locked) {
+    return (
+      <span className="block px-2 py-1.5 text-[11.5px] italic text-faint">
+        Select category code first
+      </span>
+    );
+  }
+
+  if (col.searchable) {
+    return (
+      <div className="px-1 py-0.5">
+        <SearchSelect portal value={value} onChange={onPick}
+          options={opts as string[]}
+          allowCreate={col.allowCreate}
+          placeholder={col.label} />
+        {offList && <OffListHint />}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <select value={value} onChange={(e) => onPick(e.target.value)}
+        className="!m-0 !w-full !rounded-none !border-0 !bg-transparent !px-1.5 !py-1.5 !text-[12px]">
+        {!col.fixed && <option value="">—</option>}
+        {/* A stored value outside the list stays selectable, so saving the
+            row cannot silently change it. */}
+        {offList && <option value={value}>{value}</option>}
+        {opts.map((o) => (
+          <option key={o} value={o}>{col.labels?.[o] ?? o}</option>
+        ))}
+      </select>
+      {offList && <OffListHint />}
+    </>
+  );
+}
+
+/** Marks a saved value that is not in the current option list. */
+const OffListHint = () => (
+  <span className="block px-2 pb-1 text-[10px] text-warning-700">not in list</span>
+);
+
 /** Fixed row height, in px, that the virtualizer's arithmetic depends on. */
 const ROW_HEIGHT = 33;
 
@@ -109,6 +173,14 @@ interface ColumnDef {
    * produce an invalid code.
    */
   fixed?: boolean;
+  /** Group heading above the column: CRM / Category / Content / Tracking. */
+  group?: "CRM" | "Category" | "Content" | "Tracking";
+  /** Sub-category: its options depend on the row's category code. */
+  dependsOnCategoryCode?: boolean;
+  /** Type-to-filter, for long option lists. */
+  searchable?: boolean;
+  /** Brand code only: CRM may type a value that is not in the list. */
+  allowCreate?: boolean;
 }
 
 /** What Category fills in. Mirrors categoryValidation's mandatory set. */
@@ -197,37 +269,60 @@ const CATEGORY_COLUMNS: ColumnDef[] = [
 
 /** Final QC — every field CRM used to open each record to check. */
 const QC_COLUMNS: ColumnDef[] = [
-  { key: "campaign_name", label: "Campaign Name", width: 190 },
-  { key: "header", label: "Header", width: 200 },
-  { key: "sub_copy_text", label: "Sub Copy", width: 200 },
-  { key: "creative_link", label: "Creative Link", width: 190 },
-  { key: "sound", label: "Sound", width: 70, type: "bool" },
-  { key: "global_limit", label: "GL", width: 60, type: "bool" },
+  // ── CRM Step 1, read-only: what CRM uploaded ──
+  { group: "CRM", key: "launch_date", label: "Date", width: 100, type: "readonly" },
+  { group: "CRM", key: "launch_time", label: "Time", width: 90, type: "readonly" },
+  // Slot shows the uploaded value. Its logic is UNCHANGED — no dropdown.
+  { group: "CRM", key: "slot_label", label: "Slot", width: 70, type: "readonly" },
+  { group: "CRM", key: "pncc_segment_label", label: "Segment", width: 150, type: "readonly" },
+  { group: "CRM", key: "category", label: "Category", width: 130, type: "readonly" },
+  // ── Category input, read-only here ──
+  { group: "Category", key: "campaign_name", label: "Campaign Name", width: 190 },
+  { group: "Category", key: "sub_category", label: "Sub Category", width: 140, type: "readonly" },
+  { group: "Category", key: "brand", label: "Brand", width: 150, type: "readonly" },
+  { group: "Category", key: "offer", label: "Offer", width: 160, type: "readonly" },
+  { group: "Category", key: "landing", label: "Landing Link", width: 220, type: "readonly" },
+  { group: "Category", key: "expected_cvr", label: "Expected CVR", width: 110, type: "readonly" },
+  { group: "Category", key: "expected_rpv", label: "Expected RPV", width: 110, type: "readonly" },
+  { group: "Category", key: "brief", label: "Category Brief", width: 230, type: "readonly", longText: true },
+  { group: "Category", key: "additional_notes", label: "Comments", width: 200, type: "readonly", longText: true },
+  // ── Content input ──
+  { group: "Content", key: "header", label: "Header", width: 200 },
+  { group: "Content", key: "sub_copy_text", label: "Sub Copy", width: 200 },
+  { group: "Content", key: "h_count", label: "H Count", width: 80, type: "readonly" },
+  { group: "Content", key: "s_count", label: "S Count", width: 80, type: "readonly" },
+  { group: "Content", key: "creative_link", label: "Creative Link", width: 190 },
+  { group: "Tracking", key: "sound", label: "Sound", width: 70, type: "bool" },
+  { group: "Tracking", key: "global_limit", label: "GL", width: 60, type: "bool" },
   // Tracking short codes — dropdowns, never free text. Master lists live
   // in lib/trackingMasters.ts so new values need no code change.
   // Entry method from lib/trackingFields.ts — the SAME config the drawer
   // uses, so Solo PN and Show All PN cannot drift apart.
-  { fixed: true, key: "campaign_type", label: "Campaign Type", width: 110, type: "readonly" },
-  { fixed: true, key: "campaign_name_code", label: "Campaign Name", width: 110, type: "readonly" },
-  { fixed: true, key: "channel_name", label: "Channel Name", width: 110, type: "readonly" },
-  { key: "channel_format", label: "Channel Format", width: 110, type: "select", options: CHANNEL_FORMATS },
-  { key: "segment_1", label: "Segment 1", width: 130 },
-  { key: "segment_2", label: "Segment 2", width: 110 },
-  { key: "tracking_category", label: "Category (code)", width: 130 },
-  { key: "tracking_sub_category", label: "Sub Cat (code)", width: 130 },
-  { key: "tracking_brand", label: "Brand (code)", width: 130 },
-  { key: "tracking_landing", label: "Landing (code)", width: 110, type: "select", options: LANDING_VALUES },
-  { key: "tracking_offer", label: "Offer (code)", width: 110 },
-  { key: "keywords", label: "Keywords", width: 120 },
-  { key: "tracking_code_check", label: "Check", width: 130, type: "readonly" },
-  { key: "cid", label: "CID", width: 120 },
-  { key: "campaign_id_ext", label: "Campaign ID", width: 130 },
-  { key: "tracking_code", label: "Tracking Code", width: 280 },
-  { key: "collapse", label: "Collapse ID", width: 120 },
-  { key: "group_id", label: "Group ID", width: 120 },
-  { key: "ops_details", label: "Ops Details", width: 180 },
-  { key: "feedback_1", label: "Feedback 1", width: 160 },
-  { key: "feedback_2", label: "Feedback 2", width: 160 },
+  // Options come from src/config/pn_dropdown_options.json via lib/pnDropdowns.
+  // Nothing is hard-coded here, so CRM updates the JSON and the lists follow.
+  { group: "Tracking", key: "campaign_type", label: "Campaign Type", width: 130, type: "select", options: optionsFor("campaign_type") },
+  { group: "Tracking", key: "campaign_name_code", label: "Campaign Name", width: 130, type: "select", options: optionsFor("campaign_name_code") },
+  { group: "Tracking", key: "channel_name", label: "Channel Name", width: 130, type: "select", options: optionsFor("channel_name") },
+  { group: "Tracking", key: "channel_format", label: "Channel Format", width: 130, type: "select", options: optionsFor("channel_format") },
+  { group: "Tracking", key: "segment_1", label: "Segment 1", width: 150, type: "select", options: optionsFor("segment_1"), searchable: true },
+  { group: "Tracking", key: "segment_2", label: "Segment 2", width: 120, type: "select", options: optionsFor("segment_2") },
+  { group: "Tracking", key: "tracking_category", label: "Category (code)", width: 140, type: "select", options: optionsFor("tracking_category") },
+  // Dependent: disabled until Category (code) is chosen.
+  { group: "Tracking", key: "tracking_sub_category", label: "Sub Cat (code)", width: 150, type: "select", dependsOnCategoryCode: true },
+  // 3,598 values — searchable, and CRM may add a new code.
+  { group: "Tracking", key: "tracking_brand", label: "Brand (code)", width: 150, type: "select", options: optionsFor("tracking_brand"), searchable: true, allowCreate: true },
+  { group: "Tracking", key: "tracking_landing", label: "Landing (code)", width: 130, type: "select", options: optionsFor("tracking_landing") },
+  { group: "Tracking", key: "tracking_offer", label: "Offer (code)", width: 130, type: "select", options: optionsFor("tracking_offer") },
+  { group: "Tracking", key: "keywords", label: "Keywords", width: 150, type: "select", options: optionsFor("keywords"), searchable: true },
+  { group: "Tracking", key: "tracking_code_check", label: "Check", width: 130, type: "readonly" },
+  { group: "Tracking", key: "cid", label: "CID", width: 120 },
+  { group: "Tracking", key: "campaign_id_ext", label: "Campaign ID", width: 130 },
+  { group: "Tracking", key: "tracking_code", label: "Tracking Code", width: 280 },
+  { group: "Tracking", key: "collapse", label: "Collapse ID", width: 120 },
+  { group: "Tracking", key: "group_id", label: "Group ID", width: 120 },
+  { group: "Tracking", key: "ops_details", label: "Ops Details", width: 180 },
+  { group: "Tracking", key: "feedback_1", label: "Feedback 1", width: 160 },
+  { group: "Tracking", key: "feedback_2", label: "Feedback 2", width: 160 },
 ];
 
 /** The ten Final QC checklist boxes, edited inline rather than in a drawer. */
@@ -435,8 +530,14 @@ export function BulkWorkspace({
 
   /* ---------------- bulk fill ---------------- */
 
-  /** Columns that can be bulk-filled: the dropdown tracking fields. */
-  const fillableColumns = columns.filter((c) => c.type === "select" && !c.fixed);
+  /**
+   * Columns CRM can bulk fill. BULK_FILL_KEYS is the agreed set (Campaign
+   * Type, Campaign Name, Channel Name, Channel Format, Segment 2); the
+   * dependent sub-category is excluded because a single value cannot be
+   * valid across rows with different category codes.
+   */
+  const fillableColumns = columns.filter(
+    (c) => c.type === "select" && !c.fixed && BULK_FILL_KEYS.has(String(c.key)));
   const fillColumn = fillableColumns.find((c) => String(c.key) === fillKey);
 
   /**
@@ -451,21 +552,29 @@ export function BulkWorkspace({
    * source sheet, so CRM sets them by hand on every row, and doing that one
    * cell at a time across a hundred PNs is the slowest thing on this screen.
    */
-  const applyToSelected = () => {
-    if (!fillColumn || selected.size === 0) return;
+  const applyFill = (ids: string[], scope: string) => {
+    if (!fillColumn || ids.length === 0) return;
     const key = fillColumn.key;
     setDirty((prev) => {
       const next = { ...prev };
-      for (const id of selected) {
+      for (const id of ids) {
+        // ONLY this column. Every other field on the row is untouched.
         next[id] = { ...next[id], [key]: fillValue };
       }
       return next;
     });
     setDone(
-      `${fillColumn.label} set to "${fillValue || "(blank)"}" on ${selected.size} ` +
-      `selected row${selected.size === 1 ? "" : "s"}. Not saved yet — press Save Draft.`
+      `Applied "${fillValue || "(blank)"}" to ${ids.length} ${scope} ` +
+      `row${ids.length === 1 ? "" : "s"} (${fillColumn.label}). ` +
+      `Not saved yet — press Save Draft.`
     );
   };
+
+  const applyToSelected = () => applyFill([...selected], "selected");
+
+  /** Every row currently visible after the category filter. */
+  const applyToAllVisible = () =>
+    applyFill(visibleCampaigns.map((c) => c.id), "visible");
 
   /* ---------------- persistence ---------------- */
 
@@ -702,6 +811,12 @@ export function BulkWorkspace({
                   onClick={applyToSelected}>
                   Apply to selected{selected.size ? ` (${selected.size})` : ""}
                 </Button>
+                <Button size="sm" variant="ghost"
+                  disabled={busy !== null || !fillColumn || !fillValue
+                    || visibleCampaigns.length === 0}
+                  onClick={applyToAllVisible}>
+                  Apply to all visible ({visibleCampaigns.length})
+                </Button>
               </div>
             </>
           )}
@@ -864,16 +979,21 @@ export function BulkWorkspace({
                             options={masterData.brands} placeholder="Brand" />
                         </div>
                       ) : col.type === "select" ? (
-                        <select
+                        <TrackingCell col={col} campaign={c}
                           value={valueOf(c, col.key)}
-                          onChange={(e) => setField(c.id, col.key, e.target.value)}
-                          className="!m-0 !w-full !rounded-none !border-0 !bg-transparent !px-1.5 !py-1.5 !text-[12px]">
-                          {!col.fixed && <option value="">—</option>}
-                          {(col.options ?? []).map((o) => (
-                            // Label is display only; the stored value is `o`.
-                            <option key={o} value={o}>{col.labels?.[o] ?? o}</option>
-                          ))}
-                        </select>
+                          onPick={(v) => {
+                            setField(c.id, col.key, v);
+                            /**
+                             * Changing the category code can invalidate the
+                             * saved sub-category, so it is cleared rather
+                             * than left pointing at a code that is no longer
+                             * offered.
+                             */
+                            if (col.key === "tracking_category"
+                              && !isSubcategoryValid(v, valueOf(c, "tracking_sub_category"))) {
+                              setField(c.id, "tracking_sub_category", "");
+                            }
+                          }} />
                       ) : col.type === "deadline" ? (
                         <DeadlineCell campaign={c} now={now} />
                       ) : col.fixed ? (

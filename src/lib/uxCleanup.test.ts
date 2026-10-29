@@ -45,16 +45,23 @@ describe("Tests 1-2 — Category input Sub Category and Brand", () => {
 
 /* ── TESTS 3-5: CRM tracking fields ── */
 describe("Tests 3-5 — fixed and free-text tracking fields", () => {
+  /**
+   * SUPERSEDED for the GRID only: Campaign Type, Campaign Name and Channel
+   * Name are now dropdowns there, per the dropdown-options brief. The
+   * drawer still shows them as fixed pn / prp / push, and
+   * FIXED_TRACKING_VALUES is unchanged, so the generator is unaffected.
+   */
   it("the three fixed values are exactly pn / prp / push", () => {
     expect(FIXED_TRACKING_VALUES.campaign_type).toBe("pn");
     expect(FIXED_TRACKING_VALUES.campaign_name_code).toBe("prp");
     expect(FIXED_TRACKING_VALUES.channel_name).toBe("push");
   });
 
-  it("they are fixed, not selects", () => {
+  it("they are still fixed in the shared config and the drawer", () => {
     for (const k of ["campaign_type", "campaign_name_code", "channel_name"]) {
       expect(isFixed(k)).toBe(true);
     }
+    expect(drawer).toContain("FIXED_TRACKING_VALUES.campaign_type");
   });
 
   it("the six named fields are free text", () => {
@@ -64,12 +71,23 @@ describe("Tests 3-5 — fixed and free-text tracking fields", () => {
     }
   });
 
-  it("Show All PN has no leftover dropdown for those six", () => {
+  /**
+   * SUPERSEDED. These six were converted to free text in the UX-cleanup
+   * round, then back to dropdowns sourced from
+   * src/config/pn_dropdown_options.json. The later instruction wins, so the
+   * assertion is inverted rather than deleted — the fields must now be
+   * selects, and their options must come from the JSON, not be hard-coded.
+   */
+  it("Show All PN drives those six from the JSON option lists", () => {
     for (const k of ["segment_1", "segment_2", "tracking_category",
-                     "tracking_sub_category", "tracking_offer", "keywords"]) {
+                     "tracking_offer", "keywords"]) {
       const line = bulk.split("\n").find((l) => l.includes(`key: "${k}"`))!;
-      expect(line, `${k} still a select`).not.toContain('type: "select"');
+      expect(line, `${k} should be a select`).toContain('type: "select"');
+      expect(line, `${k} options must come from the JSON`).toContain("optionsFor(");
     }
+    // Sub-category is dependent, so its options are resolved per row.
+    const sub = bulk.split("\n").find((l) => l.includes('key: "tracking_sub_category"'))!;
+    expect(sub).toContain("dependsOnCategoryCode: true");
   });
 
   it("Solo PN and Show All PN read the SAME config file", () => {
