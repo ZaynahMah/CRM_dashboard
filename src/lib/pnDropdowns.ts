@@ -111,3 +111,56 @@ export const BULK_FILL_KEYS = new Set([
 
 /** Brand codes are lowercase alphanumerics — enforced on an added value. */
 export const isValidNewBrandCode = (v: string) => /^[a-z0-9]+$/.test(v.trim());
+
+/**
+ * Which fields CRM may add new values to.
+ *
+ * Brand only for now. Opening Segment 1 or Keywords later is adding a key
+ * here — the storage, merge and validation are already generic.
+ */
+export const ALLOW_ADD_NEW = new Set(["tracking_brand"]);
+
+/** The `field` value stored in custom_pn_options for a grid column. */
+export const STORAGE_FIELD: Record<string, string> = {
+  tracking_brand: "brand_code",
+  segment_1: "segment_1",
+  keywords: "keywords",
+};
+
+/**
+ * Normalises a value for duplicate checking: trimmed and lowercased, so
+ * "Levis", "LEVIS" and " levis " are all the same code.
+ */
+export const normaliseOptionValue = (v: string) => v.trim().toLowerCase();
+
+/**
+ * JSON options first, then anything CRM has added, de-duplicated
+ * case-insensitively.
+ *
+ * JSON order is preserved and added values are appended in the order they
+ * were added, so a familiar list never reshuffles under the user.
+ */
+export function mergeOptions(
+  key: string, custom: readonly string[]
+): readonly string[] {
+  const base = optionsFor(key);
+  const seen = new Set(base.map(normaliseOptionValue));
+  const extra: string[] = [];
+  for (const c of custom) {
+    const n = normaliseOptionValue(c);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    extra.push(c);
+  }
+  return extra.length === 0 ? base : [...base, ...extra];
+}
+
+/** Is this value already taken, in the JSON or in the added values? */
+export function isDuplicateOption(
+  key: string, custom: readonly string[], candidate: string
+): boolean {
+  const n = normaliseOptionValue(candidate);
+  if (!n) return false;
+  return optionsFor(key).some((o) => normaliseOptionValue(o) === n)
+    || custom.some((o) => normaliseOptionValue(o) === n);
+}

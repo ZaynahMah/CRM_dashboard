@@ -23,8 +23,9 @@ import masterData from "@/data/masterData.json";
 import { CHANNEL_FORMATS, LANDING_VALUES } from "@/lib/trackingMasters";
 import {
   optionsFor, subcategoriesFor, isSubcategoryValid, isOffList,
-  BULK_FILL_KEYS, isValidNewBrandCode,
+  BULK_FILL_KEYS, isValidNewBrandCode, mergeOptions, isDuplicateOption,
 } from "@/lib/pnDropdowns";
+import { listCustomOptions, addCustomOption } from "@/services/customOptions";
 import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 
 /**
@@ -81,7 +82,10 @@ function DeadlineCell({ campaign, now }: { campaign: Campaign; now: Date }) {
  * sub-category list, type-to-filter for long lists, and showing a stored
  * value that is no longer in the option list instead of wiping it.
  */
-function TrackingCell({ col, categoryCode: rawCategoryCode, value, onPick }: {
+function TrackingCell({
+  col, categoryCode: rawCategoryCode, value, onPick,
+  customValues, onCreate, createError,
+}: {
   col: ColumnDef;
   /**
    * The row's category code AS CURRENTLY EDITED.
@@ -95,6 +99,11 @@ function TrackingCell({ col, categoryCode: rawCategoryCode, value, onPick }: {
   categoryCode: string;
   value: string;
   onPick: (v: string) => void;
+  /** JSON options plus anything CRM has added, already de-duplicated. */
+  customValues?: readonly string[];
+  /** Adds a new value to the shared list. Brand only, today. */
+  onCreate?: (v: string) => Promise<void>;
+  createError?: string | null;
 }) {
   // Trimmed, because a stored value may carry whitespace the JSON keys lack.
   const categoryCode = (rawCategoryCode ?? "").toString().trim();
@@ -109,6 +118,11 @@ function TrackingCell({ col, categoryCode: rawCategoryCode, value, onPick }: {
   const locked = dependent && categoryCode === "";
   const unknownCategory = dependent && categoryCode !== "" && opts.length === 0;
   const offList = isOffList(String(col.key), value);
+  // JSON first, added values appended in the order they were added.
+  const mergedOptions = col.allowCreate || (customValues?.length ?? 0) > 0
+    ? mergeOptions(String(col.key), customValues ?? [])
+    : opts;
+  const onCreateValue = onCreate;
 
   if (locked) {
     return (
@@ -122,8 +136,11 @@ function TrackingCell({ col, categoryCode: rawCategoryCode, value, onPick }: {
     return (
       <div className="px-1 py-0.5">
         <SearchSelect portal value={value} onChange={onPick}
-          options={opts as string[]}
+          options={mergedOptions as string[]}
           allowCreate={col.allowCreate}
+          onCreate={col.allowCreate ? onCreateValue : undefined}
+          createLabel="+ Add new brand code"
+          createError={createError}
           placeholder={col.label} />
         {offList && <OffListHint />}
       </div>
@@ -398,6 +415,42 @@ export function BulkWorkspace({
    * reload. One timer for the whole grid, not one per row.
    */
   const [now, setNow] = useState(() => new Date());
+
+  /**
+   * Brand codes CRM has added, loaded ONCE for the whole grid rather than
+   * per cell. A failed read yields an empty list and the dropdown falls back
+   * to the JSON options.
+   */
+  const [customBrands, setCustomBrands] = useState<string[]>([]);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listCustomOptions("tracking_brand")
+      .then((v) => { if (!cancelled) setCustomBrands(v); })
+      .catch(() => { if (!cancelled) setCustomBrands([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const addBrandCode = useCallback(async (raw: string) => {
+    setCreateError(null);
+    const v = raw.trim().toLowerCase();
+    if (!v) { setCreateError("Enter a brand code."); return; }
+    if (!isValidNewBrandCode(v)) {
+      setCreateError("Letters and digits only, no spaces or symbols.");
+      return;
+    }
+    if (isDuplicateOption("tracking_brand", customBrands, v)) {
+      setCreateError(`"${v}" already exists.`);
+      return;
+    }
+    try {
+      const saved = await addCustomOption("tracking_brand", v, profileId);
+      setCustomBrands((p) => [...p, saved]);
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : String(e));
+    }
+  }, [customBrands, profileId]);
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(t);
@@ -1003,6 +1056,16 @@ export function BulkWorkspace({
                         </div>
                       ) : col.type === "select" ? (
                         <TrackingCell col={col}
+                          customValues={col.allowCreate ? customBrands : undefined}
+                          onCreate={col.allowCreate
+                            // Adds to the shared list, then selects it on
+                            // this row so CRM does not have to find it again.
+                            ? async (v) => {
+                                await addBrandCode(v);
+                                setField(c.id, col.key, v.trim().toLowerCase());
+                              }
+                            : undefined}
+                          createError={col.allowCreate ? createError : null}
                           categoryCode={valueOf(c, "tracking_category")}
                           value={valueOf(c, col.key)}
                           onPick={(v) => {

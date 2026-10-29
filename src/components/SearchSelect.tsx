@@ -14,7 +14,10 @@ import { createPortal } from "react-dom";
  * which cuts the menu off and makes its option list unscrollable. Opt-in so
  * that surfaces which already work are left exactly as they were.
  */
-export function SearchSelect({ value, onChange, options, placeholder, disabled, portal = false, allowCreate = false }: {
+export function SearchSelect({
+  value, onChange, options, placeholder, disabled, portal = false,
+  allowCreate = false, onCreate, createLabel, createError,
+}: {
   value: string;
   onChange: (v: string) => void;
   options: string[];
@@ -23,10 +26,27 @@ export function SearchSelect({ value, onChange, options, placeholder, disabled, 
   portal?: boolean;
   /** Show "+ Add new value" when the typed text matches nothing in the list. */
   allowCreate?: boolean;
+  /**
+   * Adds a new value to the SHARED list. When given, the create row sits at
+   * the TOP of the menu rather than only appearing after a no-match search,
+   * so CRM can find it without guessing.
+   */
+  onCreate?: (v: string) => Promise<void> | void;
+  createLabel?: string;
+  createError?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newVal, setNewVal] = useState("");
+
+  /** Adds the typed value, then selects it on this row. */
+  const submitNew = async () => {
+    if (!onCreate) return;
+    await onCreate(newVal);
+    setCreating(false); setNewVal("");
+  };
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +67,17 @@ export function SearchSelect({ value, onChange, options, placeholder, disabled, 
   const place = useCallback(() => {
     if (!portal || !ref.current) return;
     const r = ref.current.getBoundingClientRect();
-    setRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    /**
+     * Flip upward when there is not enough room below, so a field near the
+     * bottom of a long grid still shows its list. MENU_MAX is the menu's own
+     * max height plus the search box.
+     */
+    const MENU_MAX = 320;
+    const below = window.innerHeight - r.bottom;
+    const flip = below < MENU_MAX && r.top > below;
+    setRect(flip
+      ? { top: Math.max(8, r.top - MENU_MAX - 4), left: r.left, width: r.width }
+      : { top: r.bottom + 4, left: r.left, width: r.width });
   }, [portal]);
 
   // Measure before paint so the menu never appears at the wrong spot first.
@@ -79,12 +109,55 @@ export function SearchSelect({ value, onChange, options, placeholder, disabled, 
       ref={menuRef}
       style={portal && rect ? { position: "fixed", top: rect.top, left: rect.left, width: rect.width } : undefined}
       className={portal
-        ? "z-[60] rounded-xl border border-line bg-surface shadow-pop"
+        /**
+         * z-[90], ABOVE the Show All PN modal's z-[70].
+         *
+         * ROOT CAUSE of "the box is bordered but clicking does nothing":
+         * the menu portals to document.body, so it is a sibling of the
+         * modal, not a child. At z-[60] it rendered BEHIND the modal's
+         * backdrop — open, mounted, and completely invisible. The click
+         * worked; the result was hidden.
+         */
+        ? "z-[90] rounded-xl border border-line bg-surface shadow-pop"
         : "absolute left-0 top-full z-50 mt-1 w-full rounded-xl border border-line bg-surface shadow-pop"}
     >
+      {onCreate && (
+        <div className="border-b border-line p-2">
+          {creating ? (
+            <div className="flex items-center gap-1.5">
+              <input autoFocus value={newVal}
+                onChange={(e) => setNewVal(e.target.value)}
+                placeholder="lowercase letters and digits"
+                className="!border-line !p-1.5 !text-tiny"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { void submitNew(); }
+                  if (e.key === "Escape") { setCreating(false); setNewVal(""); }
+                }} />
+              <button type="button" onClick={() => void submitNew()}
+                className="rounded-lg bg-indigo-600 px-2 py-1 text-micro font-medium text-white">
+                Add
+              </button>
+              <button type="button"
+                onClick={() => { setCreating(false); setNewVal(""); }}
+                className="px-1 text-micro text-faint hover:text-heading">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setCreating(true)}
+              className="w-full rounded-lg px-2 py-1.5 text-left text-tiny font-medium text-indigo-700 hover:bg-indigo-50">
+              {createLabel ?? "+ Add new value"}
+            </button>
+          )}
+          {createError && (
+            <p className="mt-1 px-2 text-micro text-danger-700">{createError}</p>
+          )}
+        </div>
+      )}
+
       <div className="border-b border-line p-2">
         <input
-          autoFocus
+          autoFocus={!onCreate}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Type to search"
@@ -160,6 +233,16 @@ export function SearchSelect({ value, onChange, options, placeholder, disabled, 
         type="button"
         disabled={disabled}
         onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onKeyDown={(e) => {
+          // Enter/Space/ArrowDown open it; Escape closes. The button is a
+          // real <button>, so Tab already reaches it.
+          if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+            e.preventDefault(); setOpen(true);
+          }
+          if (e.key === "Escape") setOpen(false);
+        }}
         className="flex w-full items-center justify-between rounded-lg border border-line bg-white px-3 py-[9px] text-left text-[13.5px] transition-colors hover:border-indigo-300 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 disabled:bg-[#F9FAFB] disabled:text-faint"
       >
         <span className={value ? "text-heading" : "text-faint"}>

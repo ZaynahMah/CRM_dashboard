@@ -153,3 +153,110 @@ describe("Part C — the Content home category filter", () => {
       .toBeLessThan(queue.indexOf("const { pending, submitted, title"));
   });
 });
+
+/* ══════════ ROOT CAUSE: the portal menu was behind the modal ══════════ */
+import { mergeOptions, isDuplicateOption, ALLOW_ADD_NEW, STORAGE_FIELD,
+  normaliseOptionValue, isValidNewBrandCode } from "./pnDropdowns";
+
+describe("the dropdown menu renders above the Show All PN modal", () => {
+  const ss = readFileSync(join(__dirname, "../components/SearchSelect.tsx"), "utf8");
+
+  it("the portal menu is z-[90], above the modal's z-[70]", () => {
+    expect(ss).toContain("z-[90]");
+    expect(ss).not.toContain('? "z-[60] rounded-xl');
+    expect(bulk).toContain("fixed inset-0 z-[70]");
+  });
+
+  it("the menu z-index strictly exceeds the modal's", () => {
+    const menuZ = Number(ss.match(/\? "z-\[(\d+)\] rounded-xl/)![1]);
+    const modalZ = Number(bulk.match(/fixed inset-0 z-\[(\d+)\]/)![1]);
+    expect(menuZ).toBeGreaterThan(modalZ);
+  });
+
+  it("flips upward when there is no room below", () => {
+    expect(ss).toContain("const flip = below < MENU_MAX");
+    expect(ss).toContain("Math.max(8, r.top - MENU_MAX - 4)");
+  });
+
+  it("is keyboard operable", () => {
+    expect(ss).toContain('aria-haspopup="listbox"');
+    expect(ss).toContain("aria-expanded={open}");
+    expect(ss).toContain('e.key === "ArrowDown"');
+  });
+
+  it("the search input stays inside the menu", () => {
+    expect(ss).toContain('placeholder="Type to search"');
+  });
+});
+
+/* ══════════ ADD NEW BRAND CODE ══════════ */
+describe("add new brand code", () => {
+  it("is enabled for Brand only", () => {
+    expect(ALLOW_ADD_NEW.has("tracking_brand")).toBe(true);
+    expect(ALLOW_ADD_NEW.has("segment_1")).toBe(false);
+    expect(ALLOW_ADD_NEW.has("keywords")).toBe(false);
+  });
+
+  it("maps columns to their storage field", () => {
+    expect(STORAGE_FIELD.tracking_brand).toBe("brand_code");
+  });
+
+  it("appends added values AFTER the JSON list, in order added", () => {
+    const merged = mergeOptions("tracking_brand", ["zzzcustom", "aaacustom"]);
+    const base = optionsFor("tracking_brand");
+    expect(merged.slice(0, base.length)).toEqual([...base]);
+    expect(merged.slice(base.length)).toEqual(["zzzcustom", "aaacustom"]);
+  });
+
+  it("de-duplicates case-insensitively against the JSON", () => {
+    const first = optionsFor("tracking_brand")[0];
+    const merged = mergeOptions("tracking_brand", [first.toUpperCase()]);
+    expect(merged).toHaveLength(optionsFor("tracking_brand").length);
+  });
+
+  it("rejects a duplicate of a JSON value, any case", () => {
+    const first = optionsFor("tracking_brand")[0];
+    expect(isDuplicateOption("tracking_brand", [], first)).toBe(true);
+    expect(isDuplicateOption("tracking_brand", [], first.toUpperCase())).toBe(true);
+    expect(isDuplicateOption("tracking_brand", [], ` ${first} `)).toBe(true);
+  });
+
+  it("rejects a duplicate of an already-added value", () => {
+    expect(isDuplicateOption("tracking_brand", ["testbrand123"], "TestBrand123")).toBe(true);
+  });
+
+  it("accepts a genuinely new code", () => {
+    expect(isDuplicateOption("tracking_brand", [], "testbrand123")).toBe(false);
+    expect(isValidNewBrandCode("testbrand123")).toBe(true);
+  });
+
+  it('rejects "my brand!" and other invalid formats', () => {
+    for (const bad of ["my brand!", "My Brand", "has-dash", "has_underscore", ""]) {
+      expect(isValidNewBrandCode(bad), bad).toBe(false);
+    }
+  });
+
+  it("normalises before comparing", () => {
+    expect(normaliseOptionValue("  LEVIS  ")).toBe("levis");
+  });
+
+  it("the create row sits at the TOP of the menu", () => {
+    const ss = readFileSync(join(__dirname, "../components/SearchSelect.tsx"), "utf8");
+    expect(ss.indexOf("onCreate && (")).toBeLessThan(ss.indexOf('placeholder="Type to search"'));
+    expect(ss).toContain("+ Add new value");
+    expect(bulk).toContain('createLabel="+ Add new brand code"');
+  });
+
+  it("falls back to the JSON list when the table is unreachable", () => {
+    const svc = readFileSync(join(__dirname, "../services/customOptions.ts"), "utf8");
+    expect(svc).toContain("cache.set(field, []);");
+    expect(svc).toContain("migration 30 has not been run");
+  });
+
+  it("reads the table once, not per cell", () => {
+    const svc = readFileSync(join(__dirname, "../services/customOptions.ts"), "utf8");
+    expect(svc).toContain("const cache = new Map");
+    expect(svc).toContain("inflight");
+    expect(bulk).toContain('listCustomOptions("tracking_brand")');
+  });
+});
