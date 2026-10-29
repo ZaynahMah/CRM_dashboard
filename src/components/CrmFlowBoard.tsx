@@ -35,8 +35,12 @@ import { BulkWorkspace, type WorkspaceMode } from "./BulkWorkspace";
 
 interface Action {
   label: string;
-  /** Applied to each selected id in turn; every call names one UUID. */
-  run: (ids: string[]) => Promise<void>;
+  /**
+   * Applied to each selected id in turn; every call names one UUID.
+   * May return per-row outcomes so partial results (some sent, some
+   * blocked) can be reported instead of failing the whole batch.
+   */
+  run: (ids: string[]) => Promise<void | BulkCalendarOutcome[]>;
 }
 
 export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, staleIds, onReloadRow }: {
@@ -53,6 +57,8 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
 
   const sendToContent: Action = {
     label: "Bulk Send Selected to Content",
+    // Returns per-row outcomes: complete rows go through, incomplete ones
+    // are reported with what each is missing.
     run: (ids) => sendBatchToContent(ids, profileId),
   };
   const markReviewed: Action = {

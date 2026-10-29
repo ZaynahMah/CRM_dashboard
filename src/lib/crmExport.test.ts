@@ -14,8 +14,7 @@ const pn = (o: Partial<Campaign> = {}) => ({
   expected_cvr: "2.5", expected_rpv: "450", additional_notes: "note",
   category_status: "LOCKED", crm_status: "AWAITING_REVIEW",
   content_status: "NOT_ASSIGNED", qc_status: "PENDING",
-  calendar_status: "NOT_UPDATED", pn_template: "Basic",
-  title_brief: "T", message_brief: "M", creative_requirements: "Hero",
+  calendar_status: "NOT_UPDATED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero",
   defaulted_at: null, default_reason: null,
   header: null, sub_copy_text: null, h_count: null, s_count: null,
   reference_link: null, creative_link: null, submitted_at: null,
@@ -61,7 +60,7 @@ describe("Incoming Inputs From Category export", () => {
   it("labels all three sub-sections", () => {
     // Pending CRM Input = Category submitted (LOCKED), CRM Part 2 not done.
     expect(sectionStatus(pn({ category_status: "LOCKED", pn_template: null }))).toBe("Pending CRM Input");
-    expect(sectionStatus(pn({ category_status: "LOCKED", pn_template: "Basic" }))).toBe("Completed CRM Input");
+    expect(sectionStatus(pn({ category_status: "LOCKED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero" }))).toBe("Completed CRM Input");
     expect(sectionStatus(pn({ defaulted_at: "2026-10-30T00:00:00Z", pn_template: null }))).toBe("Defaulted");
   });
 

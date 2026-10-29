@@ -1,4 +1,5 @@
 import type { Campaign } from "@/types/campaign";
+import { part2Ready } from "./crmPart2";
 import type { QcChecklist } from "@/types/campaign";
 
 /**
@@ -13,7 +14,7 @@ import type { QcChecklist } from "@/types/campaign";
  * Derived entirely from columns that already exist; no new status value and
  * no schema change:
  *
- *   - CRM Part 2 complete  ->  pn_template is filled
+ *   - CRM Part 2 complete  ->  all four mandatory fields filled
  *   - CRM reviewed Content ->  qc_checklists.copy_verified
  *
  * `copy_verified` is one of the ten existing Final QC checklist fields, so
@@ -32,7 +33,13 @@ const flag = (qc: QcMap, c: Campaign, key: "copy_verified" | "creative_verified"
   qc[c.id]?.[key] === true;
 
 /** CRM's Part 2 is considered done once the PN template is chosen. */
-export const part2Complete = (c: Campaign) => Boolean(c.pn_template);
+/**
+ * CRM Part 2 is complete when ALL FOUR mandatory fields are filled, not
+ * just pn_template as before. This is what decides "Pending CRM Input"
+ * versus "Completed CRM Input", so a row with a template but no briefs now
+ * correctly stays in Pending.
+ */
+export const part2Complete = (c: Campaign) => part2Ready(c);
 
 /** Terminal: finalized onto the calendar. Shown by Calendar / Final View. */
 export const isOnCalendar = (c: Campaign) => c.calendar_status === "UPDATED";

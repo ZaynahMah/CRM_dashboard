@@ -95,19 +95,19 @@ describe("upload -> ... -> export, with a real workbook", () => {
   });
 
   it("CRM Part 2 -> ready for Content", () => {
-    const c = full({ category_status: "LOCKED", pn_template: "Basic", brand: "Westside" });
+    const c = full({ category_status: "LOCKED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero", brand: "Westside" });
     expect(B.fromCategoryCompleted(c)).toBe(true);
   });
 
   it("sent to Content -> only Content's queue", () => {
-    const c = full({ category_status: "LOCKED", pn_template: "Basic",
+    const c = full({ category_status: "LOCKED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero",
       crm_status: "SENT_TO_CONTENT", content_status: "PENDING" });
     expect(B.withContent(c)).toBe(true);
     expect(B.visibleSections(c, {})).toContain("content:queue");
   });
 
   it("Content submits -> back with CRM immediately", () => {
-    const c = full({ category_status: "LOCKED", pn_template: "Basic",
+    const c = full({ category_status: "LOCKED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero",
       content_status: "SUBMITTED", header: "Festive styles", sub_copy_text: "Shop now" });
     expect(stageOf(c)).toBe("PRODUCTION_SUBMITTED");
     expect(B.fromContentPending(c, {})).toBe(true);
@@ -115,7 +115,7 @@ describe("upload -> ... -> export, with a real workbook", () => {
 
   /** The fully-filled campaign CRM would push. */
   const ready = full({
-    category_status: "LOCKED", pn_template: "Basic", content_status: "SUBMITTED",
+    category_status: "LOCKED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero", content_status: "SUBMITTED",
     header: "Festive styles", sub_copy_text: "Shop now",
     brand: "Westside", offer: "Starting @699",
     landing: "https://www.tatacliq.com/search?text=Westside%20Dresses&icid2=quick:qul:blp",
@@ -178,8 +178,8 @@ describe("upload -> ... -> export, with a real workbook", () => {
 
   it("no row is ever orphaned at any stage of the walk", () => {
     const stages: Partial<Campaign>[] = [
-      {}, { category_status: "LOCKED" }, { category_status: "LOCKED", pn_template: "Basic" },
-      { category_status: "LOCKED", pn_template: "Basic", crm_status: "SENT_TO_CONTENT", content_status: "PENDING" },
+      {}, { category_status: "LOCKED" }, { category_status: "LOCKED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero" },
+      { category_status: "LOCKED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero", crm_status: "SENT_TO_CONTENT", content_status: "PENDING" },
       { content_status: "SUBMITTED" }, { content_status: "SUBMITTED", qc_status: "PASSED" },
       { qc_status: "PASSED", calendar_status: "UPDATED" },
     ];
@@ -247,7 +247,7 @@ describe("self-QC: 2,000-row sheet -> reset -> 3,000-row sheet -> export", () =>
       sub_category: "Dresses", brief: "Festive", expected_cvr: "2.5", expected_rpv: "450" } as Campaign;
     expect(B.fromCategoryPending(c)).toBe(true);
 
-    c = { ...c, pn_template: "Basic" } as Campaign;
+    c = { ...c, pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero" } as Campaign;
     expect(B.fromCategoryCompleted(c)).toBe(true);
 
     c = { ...c, crm_status: "SENT_TO_CONTENT", content_status: "PENDING" } as Campaign;

@@ -19,6 +19,17 @@ import {
 import { Button, Card, Drawer, Field, Modal, Pill } from "./ui";
 import { SearchSelect } from "./SearchSelect";
 import { Icon } from "./icons";
+import {
+  part2Ready, missingPart2, missingPart2Keys, missingTooltip, requiredMessage,
+} from "@/lib/crmPart2";
+
+/* The red * comes from Field's existing `required` prop — no new styling. */
+
+/** Inline error under an empty mandatory field. */
+function FieldError({ show, label }: { show: boolean; label: string }) {
+  if (!show) return null;
+  return <p className="mt-1 text-micro text-danger-700">{requiredMessage(label)}</p>;
+}
 import masterData from "@/data/masterData.json";
 
 const SUB_CATEGORIES = ['Kurtas & Suit Sets', 'Sportswear', 'Dresses & Jumpsuits', 'Sports Shoes', 'Sling bags', 'Everyday Athleisure', 'Kids Apparel', 'Overall Indianwear', 'Overall - Bestseller', 'Skincare', 'Fine Jewellery', 'Formalwear', 'Makeup', 'Sandal', 'Analog & Digital', 'Herbal supplements', 'Shirts, T-shirts', 'Jeans', 'Handbags', 'Overall Hair', 'Sunglasses', 'Tshirt', 'Bed-Linen', 'Polos', 'Sneaker', 'Bedsheet', 'Bottomwear', 'Kurtas', 'Lingerie', 'Watches', 'Accessories', 'Formal wear', 'Top brands', 'Bras', 'Heels, Comfort, Ethnic', 'Footwear', 'Boys Clothing', 'Skin Care', 'Gold Jewellery', 'Premium Whey Proteins', 'Furnishing', 'Perfumes', 'Sleepwear', 'Diamond Jewellery', 'Audio', 'Speakers', 'Kitchen & Appliances', 'Decor', 'Furniture Overall', 'Shorts', 'T-shirts', 'Dresses', 'Western Wear', 'Casual wear', 'Ethnic Sets', 'Makeup essentials'];
@@ -78,6 +89,9 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   const qcPassed = qcComplete(qc, campaign);
   const creativeNeeded = creativeRequired(campaign);
   // #2: the drawer must enforce the tracking code exactly as Bulk Push does.
+  /** Which mandatory Part 2 fields are still empty, for inline errors. */
+  const missingKeys = missingPart2Keys(campaign);
+
   const tracking = trackingCheck(suggestTrackingFields(campaign));
   /**
    * The PERSISTED code, not merely "the fields look complete".
@@ -231,36 +245,54 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
           {role === "CRM" ? (
             crmApproved ? (
               <>
+                {/* All four are mandatory before this PN can move forward.
+                    Saving a draft with them empty is still allowed — only
+                    Send to Content is gated. */}
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Field label="Title Brief">
+                  <Field label="Title Brief" required>
                     <input defaultValue={campaign.title_brief ?? ""}
                       onBlur={(e) => save({ title_brief: e.target.value })} />
+                    <FieldError show={missingKeys.includes("title_brief")} label="Title Brief" />
                   </Field>
-                  <Field label="Message Brief">
+                  <Field label="Message Brief" required>
                     <input defaultValue={campaign.message_brief ?? ""}
                       onBlur={(e) => save({ message_brief: e.target.value })} />
+                    <FieldError show={missingKeys.includes("message_brief")} label="Message Brief" />
                   </Field>
-                  <Field label="PN Template">
+                  <Field label="PN Template" required>
+                    {/* Options and their order are unchanged. "Select" is the
+                        placeholder and does not count as filled. */}
                     <select defaultValue={campaign.pn_template ?? ""}
                       onChange={(e) => save({ pn_template: e.target.value })}>
                       <option value="">Select</option>
                       {["Basic","Bezel","Timer","Coloured BG"].map((t) => <option key={t}>{t}</option>)}
                     </select>
+                    <FieldError show={missingKeys.includes("pn_template")} label="PN Template" />
                   </Field>
-                  <Field label="Creative Requirements">
+                  <Field label="Creative Requirements" required>
                     <input defaultValue={campaign.creative_requirements ?? ""}
                       onBlur={(e) => save({ creative_requirements: e.target.value })} />
+                    <FieldError show={missingKeys.includes("creative_requirements")}
+                      label="Creative Requirements" />
                   </Field>
                 </div>
                 {/* Content is the only production team, so this is the single
                     production handoff. design_status is not written. */}
                 {hasCategoryInput && campaign.content_status === "NOT_ASSIGNED" && (
                   <div className="mt-4">
-                    <Button size="sm" onClick={() => logAndSave(
-                      { crm_status: "SENT_TO_CONTENT", content_status: "PENDING" },
-                      "SENT_TO_CONTENT", "CRM sent this campaign to Content.")}>
-                      {Icon.send(13)} Send to Content
-                    </Button>
+                    <span title={missingTooltip(campaign)}>
+                      <Button size="sm" disabled={!part2Ready(campaign)}
+                        onClick={() => logAndSave(
+                          { crm_status: "SENT_TO_CONTENT", content_status: "PENDING" },
+                          "SENT_TO_CONTENT", "CRM sent this campaign to Content.")}>
+                        {Icon.send(13)} Send to Content
+                      </Button>
+                    </span>
+                    {!part2Ready(campaign) && (
+                      <p className="mt-1.5 text-micro text-danger-700">
+                        Still needed: {missingPart2(campaign).join(", ")}
+                      </p>
+                    )}
                   </div>
                 )}
               </>

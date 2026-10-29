@@ -35,7 +35,7 @@ describe("end-to-end visibility", () => {
 
   it("CRM Self: invisible to Content until CRM sends", () => walk([
     ["uploaded", { is_crm_self: true, category_status: "LOCKED", crm_status: "IN_PLANNING" }, "crmself:upload/pending"],
-    ["CRM input complete", { pn_template: "Basic" }, "crmself:upload/complete"],
+    ["CRM input complete", { pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero" }, "crmself:upload/complete"],
     ["sent to Content", { crm_status: "SENT_TO_CONTENT", content_status: "PENDING" }, "crmself:sent-to-content"],
     ["Content submitted", { content_status: "SUBMITTED" }, "crmself:content/pending"],
     ["CRM reviewed", {}, "crmself:content/ready"],
@@ -46,7 +46,7 @@ describe("end-to-end visibility", () => {
   it("Category-led", () => walk([
     ["uploaded", {}, "category:queue"],
     ["Category locked", { category_status: "LOCKED" }, "category/pending"],
-    ["CRM Part 2", { pn_template: "Basic" }, "category/complete"],
+    ["CRM Part 2", { pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero" }, "category/complete"],
     ["sent to Content", { crm_status: "SENT_TO_CONTENT", content_status: "PENDING" }, "content:queue"],
     ["Content submitted", { content_status: "SUBMITTED" }, "content/pending"],
     ["CRM reviewed", {}, "content/ready"],
@@ -56,7 +56,7 @@ describe("end-to-end visibility", () => {
 
   it("Emergency", () => walk([
     ["raised", { is_emergency: true, category_status: "LOCKED" }, "category/pending"],
-    ["accepted + Part 2", { pn_template: "Timer" }, "category/complete"],
+    ["accepted + Part 2", { pn_template: "Timer", title_brief: "T", message_brief: "M", creative_requirements: "Hero" }, "category/complete"],
     ["sent to Content", { crm_status: "SENT_TO_CONTENT", content_status: "PENDING" }, "content:queue"],
     ["Content submitted", { content_status: "SUBMITTED" }, "content/pending"],
     ["CRM reviewed", {}, "content/ready"],
@@ -102,7 +102,7 @@ describe("exhaustive invariants", () => {
 
 describe("CRM Self is not auto-routed", () => {
   const unsent = PN({ is_crm_self: true, category_status: "LOCKED",
-    crm_status: "IN_PLANNING", pn_template: "Basic" });
+    crm_status: "IN_PLANNING", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero" });
   it("is not in Content's queue before Send", () => expect(B.withContent(unsent)).toBe(false));
   it("is actionable for CRM", () => expect(B.crmSelfUploadCompleted(unsent)).toBe(true));
   it("becomes read-only once sent", () => {

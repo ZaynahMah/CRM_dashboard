@@ -91,7 +91,7 @@ describe("Monthly workflow is identical for all four roles", () => {
   const population: Campaign[] = [
     PN({ id: "1" }),
     PN({ id: "2", category_status: "LOCKED" }),
-    PN({ id: "3", category_status: "LOCKED", pn_template: "Basic" }),
+    PN({ id: "3", category_status: "LOCKED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero" }),
     PN({ id: "4", content_status: "PENDING" }),
     PN({ id: "5", content_status: "SUBMITTED" }),
     PN({ id: "6", content_status: "SUBMITTED", qc_status: "PASSED" }),

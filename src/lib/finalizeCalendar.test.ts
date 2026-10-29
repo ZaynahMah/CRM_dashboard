@@ -16,7 +16,7 @@ const complete = (o: Partial<Campaign> = {}) => ({
   category_status: "LOCKED", crm_status: "SENT_TO_CONTENT",
   content_status: "SUBMITTED", design_status: "NOT_ASSIGNED",
   qc_status: "PENDING", production_status: "NOT_READY",
-  calendar_status: "NOT_UPDATED", pn_template: "Basic",
+  calendar_status: "NOT_UPDATED", pn_template: "Basic", title_brief: "T", message_brief: "M", creative_requirements: "Hero",
   header: "Festive styles", sub_copy_text: "Shop now", creative_link: null,
   landing: "https://www.tatacliq.com/search?text=a&icid2=b",
   brand: "Biba", offer: "Starting @699",

@@ -1,5 +1,8 @@
 "use client";
 
+import { canMoveForward, missingPart2 } from "@/lib/crmPart2";
+import { fetchCampaignsByIds } from "./contentBulk";
+
 import { supabase } from "@/lib/supabase";
 import type {
   ActivityLog, Campaign, ChangeRequest, ContentSubmission, CrmDecision, QcChecklist,
@@ -158,6 +161,17 @@ export async function saveDecision(campaignId: string, patch: Partial<CrmDecisio
 }
 
 export async function sendToContent(campaign: Campaign, userId: string) {
+  /**
+   * The gate, enforced where the STATUS CHANGES rather than only in the UI,
+   * so a disabled button cannot be bypassed by any other caller.
+   *
+   * A PN that has already moved on is never re-validated — existing rows
+   * sent to Content, through QC or on the calendar are untouched.
+   */
+  if (!canMoveForward(campaign)) {
+    throw new Error(
+      `Cannot send to Content — still needed: ${missingPart2(campaign).join(", ")}.`);
+  }
   await updateCampaign(campaign.id, { crm_status: "SENT_TO_CONTENT", content_status: "PENDING" });
   await log(campaign.id, userId, "SENT_TO_CONTENT", "CRM handed the campaign to Content.");
   await notify("CONTENT", "ASSIGNMENT", "New campaign assigned",
@@ -467,13 +481,52 @@ export async function rejectEmergency(campaign: Campaign, reason: string, userId
  *
  * One write per campaign id, as always.
  */
-export async function sendBatchToContent(campaignIds: string[], userId: string) {
+/**
+ * Bulk send. PARTIAL by design: complete rows go through and incomplete
+ * ones are reported back with what each is missing, rather than failing the
+ * whole batch. The existing per-row outcome pattern already supports this.
+ *
+ * Re-reads each campaign so the check runs against stored values, not a
+ * stale client copy.
+ */
+export async function sendBatchToContent(
+  campaignIds: string[], userId: string
+): Promise<BulkCalendarOutcome[]> {
+  const rows = await fetchCampaignsByIds(campaignIds);
+  const byId = new Map(rows.map((c) => [c.id, c]));
+
+  // The existing per-row outcome shape, so the board reports blocked rows
+  // the same way it already reports failures.
+  const outcomes: BulkCalendarOutcome[] = [];
+  const sent: string[] = [];
+
   for (const id of campaignIds) {
+    const c = byId.get(id);
+    if (!c) continue;
+    if (!canMoveForward(c)) {
+      outcomes.push({
+        campaignId: id, ok: false,
+        // Named by PN, date and slot, so CRM can find the blocked row.
+        campaignName: `${c.campaign_name} · ${c.launch_date ?? "no date"} · slot ${
+          c.slot_label ?? c.slot_number ?? "—"}`,
+        reason: `Incomplete CRM Part 2 — still needed: ${missingPart2(c).join(", ")}`,
+      });
+      continue;
+    }
     await updateCampaign(id, { crm_status: "SENT_TO_CONTENT", content_status: "PENDING" });
+    outcomes.push({ campaignId: id, ok: true, campaignName: c.campaign_name });
+    sent.push(id);
   }
-  await log(null, userId, "SENT_TO_CONTENT",
-    `CRM sent ${campaignIds.length} campaigns to Content.`);
-  await notify("CONTENT", "ASSIGNMENT", "New campaigns assigned", `${campaignIds.length} campaigns need copy.`);
+
+  if (sent.length > 0) {
+    await log(null, userId, "SENT_TO_CONTENT",
+      `CRM sent ${sent.length} campaigns to Content.`
+      + (outcomes.length - sent.length > 0
+         ? ` ${outcomes.length - sent.length} blocked for incomplete CRM Part 2.` : ""));
+    await notify("CONTENT", "ASSIGNMENT", "New campaigns assigned",
+      `${sent.length} campaigns need copy.`);
+  }
+  return outcomes;
 }
 
 /**

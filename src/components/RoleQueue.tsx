@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Campaign } from "@/types/campaign";
 import type { QcMap } from "@/lib/crmBuckets";
 import { contentSubmitted, withContent } from "@/lib/crmBuckets";
 import { Button, Card, Pill, Empty } from "./ui";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { businessWeekOf } from "@/lib/businessWeeks";
+import {
+  categorySubmittedCsv, categoryFileName, downloadCategoryExport, isSubmittedByCategory,
+} from "@/services/categoryExport";
 import { campaignDateIso } from "@/lib/campaignDate";
 import { planningWindow } from "@/lib/planningWindow";
 import { BulkWorkspace, type WorkspaceMode } from "./BulkWorkspace";
@@ -127,6 +130,24 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
    * The pending/submitted split and the Show All PN behaviour are the same
    * rules used above; this only groups them.
    */
+  /** Toast shown when there is nothing to export. */
+  const [exportNote, setExportNote] = useState<string | null>(null);
+
+  /**
+   * Downloads the submitted PNs of whatever rows are passed in. Drafts,
+   * pending, unfilled and defaulted rows are excluded; an empty result
+   * tells the user rather than downloading a header-only file.
+   */
+  const exportSubmitted = useCallback((rows: Campaign[]) => {
+    const submitted = rows.filter(isSubmittedByCategory);
+    if (submitted.length === 0) {
+      setExportNote("No submitted PNs to export");
+      return;
+    }
+    setExportNote(null);
+    downloadCategoryExport(categorySubmittedCsv(submitted), categoryFileName(submitted));
+  }, []);
+
   const weekSections = useMemo(() => {
     if (role !== "CATEGORY") return [];
     const win = planningWindow();
@@ -185,6 +206,13 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
           </Card>
         ) : (
           <div className="space-y-4">
+            {exportNote && (
+              <div className="flex items-center justify-between gap-3 rounded-lg bg-warning-50 px-4 py-2.5 text-tiny text-warning-700">
+                <span>{exportNote}</span>
+                <button onClick={() => setExportNote(null)}
+                  className="font-medium hover:underline">Dismiss</button>
+              </div>
+            )}
             {weekSections.map((w) => (
               <Card key={w.key} pad={false}>
                 <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-5 py-3.5">
@@ -194,11 +222,18 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
                     tone={w.pending.length > 0 ? "warning" : "neutral"} />
                   <Pill dot={false} label={`Submitted to CRM (${w.submitted.length})`}
                     tone={w.submitted.length > 0 ? "success" : "neutral"} />
-                  <div className="ml-auto">
+                  <div className="ml-auto flex items-center gap-2">
                     {/* The SAME workspace, scoped to this week's rows. */}
                     <Button size="sm" variant="ghost"
                       onClick={() => setWorkspace({ mode, rows: w.rows, run })}>
                       Show All PN ({w.rows.length})
+                    </Button>
+                    {/* Exports only what Category has SUBMITTED, from the
+                        same rows this section already shows — so any
+                        filtering applied above carries through. */}
+                    <Button size="sm" variant="ghost"
+                      onClick={() => exportSubmitted(w.rows)}>
+                      Download Export ({w.rows.filter(isSubmittedByCategory).length})
                     </Button>
                   </div>
                 </div>
