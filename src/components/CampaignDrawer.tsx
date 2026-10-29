@@ -12,6 +12,7 @@ import {
 import { trackingCheck, suggestTrackingFields } from "@/lib/trackingCode";
 import { CHANNEL_FORMATS, LANDING_VALUES } from "@/lib/trackingMasters";
 import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
+import { optionsFor, isOffList } from "@/lib/pnDropdowns";
 import {
   categoryErrors, draftFromCampaign, draftIsLockable, draftIsSavable, draftToPatch,
   isDateTimeLocal, legacyDateTimeNote, type CategoryDraft,
@@ -24,6 +25,30 @@ import {
 } from "@/lib/crmPart2";
 
 /* The red * comes from Field's existing `required` prop — no new styling. */
+
+/**
+ * A tracking dropdown in the drawer, sourced from
+ * src/config/pn_dropdown_options.json — the same list the Show All PN grid
+ * uses, so the two views can never offer different options.
+ *
+ * A stored value outside the list stays selectable, so opening the drawer on
+ * an older PN cannot silently change its code.
+ */
+function JsonSelect({ label, field, value, onPick }: {
+  label: string; field: string; value: string; onPick: (v: string) => void;
+}) {
+  const opts = optionsFor(field);
+  const off = isOffList(field, value);
+  return (
+    <Field label={label}>
+      <select value={value} onChange={(e) => onPick(e.target.value)}>
+        {off && <option value={value}>{value}</option>}
+        {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+      {off && <p className="mt-1 text-micro text-warning-700">not in list</p>}
+    </Field>
+  );
+}
 
 /** Inline error under an empty mandatory field. */
 function FieldError({ show, label }: { show: boolean; label: string }) {
@@ -334,15 +359,20 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
                 onChange={(e) => save({ global_limit: e.target.value === "Yes" })}><option>No</option><option>Yes</option></select></Field>
               {/* Entry method comes from lib/trackingFields.ts, shared with
                   Show All PN. Composition is unchanged. */}
-              <Field label="Campaign Type" hint="fixed">
-                <input readOnly value={FIXED_TRACKING_VALUES.campaign_type} />
-              </Field>
-              <Field label="Campaign Name" hint="fixed">
-                <input readOnly value={FIXED_TRACKING_VALUES.campaign_name_code} />
-              </Field>
-              <Field label="Channel Name" hint="fixed">
-                <input readOnly value={FIXED_TRACKING_VALUES.channel_name} />
-              </Field>
+              {/* Now the SAME JSON dropdowns the grid uses, so the drawer and
+                  Show All PN cannot drift. FIXED_TRACKING_VALUES are the
+                  DEFAULTS: an unset field shows pn / prp / push, so nothing
+                  changes unless CRM deliberately picks another value. The
+                  tracking-code generator is untouched. */}
+              <JsonSelect label="Campaign Type" field="campaign_type"
+                value={campaign.campaign_type ?? FIXED_TRACKING_VALUES.campaign_type}
+                onPick={(v) => save({ campaign_type: v })} />
+              <JsonSelect label="Campaign Name" field="campaign_name_code"
+                value={campaign.campaign_name_code ?? FIXED_TRACKING_VALUES.campaign_name_code}
+                onPick={(v) => save({ campaign_name_code: v })} />
+              <JsonSelect label="Channel Name" field="channel_name"
+                value={campaign.channel_name ?? FIXED_TRACKING_VALUES.channel_name}
+                onPick={(v) => save({ channel_name: v })} />
               <TrackingSelect label="Channel Format" value={campaign.channel_format}
                 options={CHANNEL_FORMATS} onPick={(v) => save({ channel_format: v })} />
               <Field label="Segment 1"><input defaultValue={campaign.segment_1 ?? ""}

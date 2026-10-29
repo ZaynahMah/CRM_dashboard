@@ -10,6 +10,9 @@ import { businessWeekOf } from "@/lib/businessWeeks";
 import {
   categorySubmittedCsv, categoryFileName, downloadCategoryExport, isSubmittedByCategory,
 } from "@/services/categoryExport";
+import {
+  CAMPAIGN_CATEGORY_FILTER_OPTIONS, ALL_CATEGORIES_LABEL, filterByCategory,
+} from "@/lib/categoryFilter";
 import { campaignDateIso } from "@/lib/campaignDate";
 import { planningWindow } from "@/lib/planningWindow";
 import { BulkWorkspace, type WorkspaceMode } from "./BulkWorkspace";
@@ -44,6 +47,18 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
     { mode: WorkspaceMode; rows: Campaign[]; run: (ids: string[]) => Promise<BulkCalendarOutcome[]> } | null
   >(null);
 
+  /**
+   * Content's home category filter.
+   *
+   * Declared above the workspace state it outlives, so the chosen category
+   * survives opening Show All PN and coming back — the workspace is a child
+   * of this component, not a separate route.
+   *
+   * Reuses the controlled list and alias matching from lib/categoryFilter,
+   * exactly as the Show All PN filter does.
+   */
+  const [homeCategory, setHomeCategory] = useState<string>(ALL_CATEGORIES_LABEL);
+
   const { pending, submitted, title, pendingLabel, submittedLabel, mode } = useMemo(() => {
     if (role === "CATEGORY") {
       // Category never sees CRM Self rows — those skip Category entirely.
@@ -57,15 +72,19 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
         submitted: mine.filter((c) => c.category_status === "LOCKED"),
       };
     }
+    // Filtered FIRST, so every section, count and Show All PN below is
+    // derived from the same narrowed set. Order is untouched — the filter
+    // only removes rows.
+    const scoped = filterByCategory(campaigns, homeCategory);
     return {
       title: "Your campaigns",
       pendingLabel: "Awaiting your copy",
       submittedLabel: "Submitted to CRM",
       mode: "CONTENT_INPUT" as WorkspaceMode,
-      pending: campaigns.filter(withContent),
-      submitted: campaigns.filter(contentSubmitted),
+      pending: scoped.filter(withContent),
+      submitted: scoped.filter(contentSubmitted),
     };
-  }, [role, campaigns]);
+  }, [role, campaigns, homeCategory]);
 
   /**
    * Submits or locks the selected rows, ONE AT A TIME with its own
@@ -132,6 +151,7 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
    */
   /** Toast shown when there is nothing to export. */
   const [exportNote, setExportNote] = useState<string | null>(null);
+
 
   /**
    * Downloads the submitted PNs of whatever rows are passed in. Drafts,
@@ -288,14 +308,27 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
       <Card pad={false}>
         <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-5 py-3.5">
           <h3 className="font-display text-[15px] font-600 text-heading">{title}</h3>
-          {(pending.length > 0 || submitted.length > 0) && (
-            <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {/* Filter by category, beside Show All PN. Same controlled list
+                and alias matching as the Show All PN filter. */}
+            {role === "CONTENT" && (
+              <select aria-label="Filter by category"
+                value={homeCategory}
+                onChange={(e) => setHomeCategory(e.target.value)}
+                className="!m-0 !w-[170px] !py-1 !text-[12px]">
+                <option value={ALL_CATEGORIES_LABEL}>{ALL_CATEGORIES_LABEL}</option>
+                {CAMPAIGN_CATEGORY_FILTER_OPTIONS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            )}
+            {(pending.length > 0 || submitted.length > 0) && (
               <Button size="sm" variant="ghost"
                 onClick={() => setWorkspace({ mode, rows: [...pending, ...submitted], run })}>
                 Show All PN ({pending.length + submitted.length})
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <QueueBucket label={pendingLabel} tone="warning" rows={pending} onOpen={onOpenCampaign} />

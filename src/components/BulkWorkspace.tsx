@@ -81,15 +81,33 @@ function DeadlineCell({ campaign, now }: { campaign: Campaign; now: Date }) {
  * sub-category list, type-to-filter for long lists, and showing a stored
  * value that is no longer in the option list instead of wiping it.
  */
-function TrackingCell({ col, campaign, value, onPick }: {
-  col: ColumnDef; campaign: Campaign; value: string;
+function TrackingCell({ col, categoryCode: rawCategoryCode, value, onPick }: {
+  col: ColumnDef;
+  /**
+   * The row's category code AS CURRENTLY EDITED.
+   *
+   * BUG FIX: this used to read `campaign.tracking_category`, the SAVED row.
+   * A pick in the grid goes into the `dirty` map, never onto the campaign,
+   * so a category code chosen moments ago was invisible here and Sub Cat
+   * stayed locked. The caller now passes `valueOf(c, "tracking_category")`,
+   * which merges dirty over saved — the same accessor every other cell uses.
+   */
+  categoryCode: string;
+  value: string;
   onPick: (v: string) => void;
 }) {
-  // Sub-category options come from the row's own category code.
-  const categoryCode = (campaign.tracking_category ?? "").toString().trim();
+  // Trimmed, because a stored value may carry whitespace the JSON keys lack.
+  const categoryCode = (rawCategoryCode ?? "").toString().trim();
   const dependent = col.dependsOnCategoryCode === true;
   const opts = dependent ? subcategoriesFor(categoryCode) : (col.options ?? []);
+  /**
+   * Locked ONLY while no category code is set. A code that is set but
+   * unknown to the JSON (an older value) leaves the cell enabled with an
+   * empty list plus the off-list hint, rather than locked — locking it would
+   * tell CRM to "select a category code first" when one is already there.
+   */
   const locked = dependent && categoryCode === "";
+  const unknownCategory = dependent && categoryCode !== "" && opts.length === 0;
   const offList = isOffList(String(col.key), value);
 
   if (locked) {
@@ -125,6 +143,11 @@ function TrackingCell({ col, campaign, value, onPick }: {
         ))}
       </select>
       {offList && <OffListHint />}
+      {unknownCategory && (
+        <span className="block px-2 pb-1 text-[10px] text-warning-700">
+          no sub-categories for “{categoryCode}”
+        </span>
+      )}
     </>
   );
 }
@@ -979,7 +1002,8 @@ export function BulkWorkspace({
                             options={masterData.brands} placeholder="Brand" />
                         </div>
                       ) : col.type === "select" ? (
-                        <TrackingCell col={col} campaign={c}
+                        <TrackingCell col={col}
+                          categoryCode={valueOf(c, "tracking_category")}
                           value={valueOf(c, col.key)}
                           onPick={(v) => {
                             setField(c.id, col.key, v);
