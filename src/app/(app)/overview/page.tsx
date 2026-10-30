@@ -12,6 +12,7 @@ import { CategorySlaStrip } from "@/components/CategorySlaStrip";
 import { ExecutiveDefaultRate } from "@/components/ExecutiveDefaultRate";
 import { WeekDeadlines } from "@/components/WeekDeadlines";
 import { CrmFlowBoard } from "@/components/CrmFlowBoard";
+import { InputChangeAlerts } from "@/components/InputChangeAlerts";
 import { RoleQueue } from "@/components/RoleQueue";
 import { ContentBulkExcel } from "@/components/ContentBulkExcel";
 import { CrmInputUpload } from "@/components/CrmInputUpload";
@@ -134,6 +135,9 @@ export default function OverviewPage() {
               {Icon.chart(13)} Download Excel
             </Button>
           </div>
+
+          {/* Red banner: input changes awaiting CRM review. */}
+          <InputChangeAlerts onOpenCampaign={setOpen} />
 
           <CrmFlowBoard campaigns={campaigns} qc={qc} profileId={profile.id}
             onChanged={reloadAll} onOpen={setOpen}
