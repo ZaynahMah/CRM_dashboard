@@ -8,6 +8,7 @@ import { StageChip, OriginChip } from "@/components/StatusChip";
 import { Button, Card, Empty, Loading, PageHead, StatCard, StatGrid, TableCard } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { downloadCSV } from "@/services/exportExcel";
+import { CalendarRangeExport } from "@/components/CalendarRangeExport";
 import { fmtDate, fmtTime } from "@/lib/format";
 
 /**
@@ -43,10 +44,14 @@ export default function FinalViewPage() {
         title="Final View / Calendar"
         sub="Only campaigns CRM has explicitly clicked “Update Calendar” for, after Final QC passed. This is the same list the Calendar page shows."
         action={profile.role === "CRM" && (
-          <Button onClick={() => downloadCSV(finalized, `PN_Final_Consolidated_${new Date().toISOString().slice(0, 10)}.csv`)}
-            disabled={finalized.length === 0}>
-            {Icon.chart(14)} Export finalized
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => downloadCSV(finalized, `PN_Final_Consolidated_${new Date().toISOString().slice(0, 10)}.csv`)}
+              disabled={finalized.length === 0}>
+              {Icon.chart(14)} Export finalized
+            </Button>
+            {/* The same export, narrowed to a date range. */}
+            <CalendarRangeExport campaigns={campaigns} />
+          </div>
         )}
       />
 

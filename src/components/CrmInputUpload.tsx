@@ -532,7 +532,7 @@ export function CrmInputUpload({
             {isCrmSelf
               ? "Campaigns CRM owns end-to-end — no Category input needed. Same columns: Day, Time, Slot, Segment, Category."
               : BATCH_UPLOAD_ENABLED
-                ? "Columns: Day, Time, Slot, Segment, Category. Multiple PNs can share a slot — that's normal. Uploads are ADD-ONLY: this file adds PNs and never changes or removes anything that already exists. Uploads from before this update can't be reset here."
+                ? "Columns: Day, Time, Slot, Segment, Category. Multiple PNs can share a slot — that's normal. Add-only: existing PNs are never changed or removed."
                 : "Columns: Day, Time, Slot, Segment, Category. Multiple PNs can share a slot — that's normal. This file is the source of truth: uploading replaces the RUNNING PNs of this stream only — campaigns already on the calendar, past Final QC or production-ready are kept."}
           </p>
         </div>
@@ -557,6 +557,26 @@ export function CrmInputUpload({
         )}
 
       </div>
+
+      {/* The batch a reset would act on, stated before the button is used. */}
+      {BATCH_UPLOAD_ENABLED && isCrm && batchPreview && (
+        <div className="mt-4 rounded-lg border border-line px-4 py-2.5">
+          <p className="text-tiny font-600 text-heading">Your last upload</p>
+          <p className="mt-0.5 text-micro text-muted">
+            {batchPreview.file_name ?? "(file name not recorded)"} ·{" "}
+            {fmtDate(batchPreview.uploaded_at.slice(0, 10))}
+            {batchPreview.uploaded_name ? ` by ${batchPreview.uploaded_name}` : ""} ·{" "}
+            {batchPreview.total} PN{batchPreview.total === 1 ? "" : "s"}
+          </p>
+          <p className="mt-1 text-micro text-muted">
+            This removes only the PNs from your last upload. PNs a team has
+            already worked on are kept.{" "}
+            <span className="text-faint">
+              Uploads from before this update can&rsquo;t be reset.
+            </span>
+          </p>
+        </div>
+      )}
 
       {BATCH_UPLOAD_ENABLED && priorUpload && (
         <div className="mt-4 rounded-lg bg-warning-50 px-4 py-3 text-tiny text-warning-700">

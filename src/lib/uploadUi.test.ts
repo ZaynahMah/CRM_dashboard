@@ -36,9 +36,14 @@ describe("the old global reset is removed", () => {
 });
 
 /* ══════════ 2. the feature flag ══════════ */
-describe("the flag rolls back in one step", () => {
-  it("defaults to OFF", () => {
-    expect(flags).toContain('NEXT_PUBLIC_BATCH_UPLOAD_ENABLED ?? ""');
+describe("add-only is the DEFAULT; legacy is opt-in", () => {
+  it("needs no environment variable to be safe", () => {
+    // Add-only is on unless someone deliberately turns the legacy path on.
+    expect(flags).toContain("export const BATCH_UPLOAD_ENABLED = !LEGACY_UPLOAD_ENABLED;");
+  });
+
+  it("the legacy replace path is OFF unless explicitly enabled", () => {
+    expect(flags).toContain('NEXT_PUBLIC_LEGACY_UPLOAD_ENABLED ?? ""');
     expect(flags).toContain('=== "true"');
   });
 
@@ -65,9 +70,15 @@ describe("the new upload is add-only", () => {
     expect(up).toContain("await addUploadBatch(");
   });
 
-  it("says add-only in the card wording", () => {
-    expect(up).toContain("Uploads are ADD-ONLY");
-    expect(up).toContain("Uploads from before this update can't be reset here");
+  it("states the mode on the card", () => {
+    expect(up).toContain("Add-only: existing PNs are never changed or removed.");
+  });
+
+  it("shows the batch details and the reset wording", () => {
+    expect(up).toContain("Your last upload");
+    expect(up).toContain("This removes only the PNs from your last upload");
+    expect(up).toContain("PNs a team has");
+    expect(up).toContain("Uploads from before this update can");
   });
 
   it("shows the per-day preview and the past-date flag", () => {

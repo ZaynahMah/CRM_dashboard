@@ -6,6 +6,7 @@ import { useCampaigns } from "@/components/useCampaigns";
 import { CampaignDrawer } from "@/components/CampaignDrawer";
 import { DayDetail } from "@/components/DayDetail";
 import { Card, Empty, Loading, PageHead } from "@/components/ui";
+import { CalendarRangeExport } from "@/components/CalendarRangeExport";
 import { fmtMonth, isoDate, today } from "@/lib/format";
 import type { Campaign } from "@/types/campaign";
 
@@ -68,7 +69,12 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-5">
-      <PageHead title="Calendar" sub="Finalized campaigns only — the same set Final View shows, laid out by date." />
+      <PageHead title="Calendar"
+        sub="Finalized campaigns only — the same set Final View shows, laid out by date."
+        action={profile?.role === "CRM" && (
+          /* The same export Final View uses, narrowed to a date range. */
+          <CalendarRangeExport campaigns={campaigns} />
+        )} />
 
       <Card pad={false}>
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
