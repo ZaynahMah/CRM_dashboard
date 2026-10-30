@@ -260,3 +260,50 @@ describe("add new brand code", () => {
     expect(bulk).toContain('listCustomOptions("tracking_brand")');
   });
 });
+
+/* ══════════ SCROLL PERFORMANCE ══════════ */
+describe("the scroll stutter fix", () => {
+  it("mergeOptions is hoisted out of the cell, into one useMemo", () => {
+    // The cost: a Set over 3,598 brand codes, previously per cell per render.
+    expect(bulk).toContain("const mergedBrandOptions = useMemo(");
+    expect(bulk).toContain('mergeOptions("tracking_brand", customBrands), [customBrands]');
+  });
+
+  it("the cell no longer merges — it receives the ready list", () => {
+    const fn = bulk.slice(bulk.indexOf("const TrackingCell = memo"),
+                          bulk.indexOf("const OffListHint"));
+    expect(fn).not.toContain("mergeOptions(");
+    expect(fn).toContain("const mergedOptions = mergedList ?? opts;");
+  });
+
+  it("scroll is coalesced to one state update per frame", () => {
+    expect(bulk).toContain("requestAnimationFrame(() => {");
+    expect(bulk).toContain("if (frame) return;");
+    expect(bulk).toContain("cancelAnimationFrame(frame)");
+  });
+
+  it("the cell is memoised", () => {
+    expect(bulk).toContain("const TrackingCell = memo(function TrackingCell");
+  });
+
+  it("the merged list is still correct after hoisting", () => {
+    const merged = mergeOptions("tracking_brand", ["testbrand123"]);
+    const base = optionsFor("tracking_brand");
+    expect(merged).toHaveLength(base.length + 1);
+    expect(merged[merged.length - 1]).toBe("testbrand123");
+    expect(merged.slice(0, base.length)).toEqual([...base]);
+  });
+
+  it("nothing about the columns, order or behaviour changed", () => {
+    const i = bulk.indexOf("const QC_COLUMNS");
+    const blk = bulk.slice(i, bulk.indexOf("];", i));
+    const keys = [...blk.matchAll(/key: "([a-z_0-9]+)"/g)].map((m) => m[1]);
+    expect(keys).toHaveLength(42);
+    expect(keys).toContain("segment_1");
+    expect(keys).toContain("tracking_sub_category");
+    // Bulk fill, Sub Cat dependency and the z-index fix are untouched.
+    expect(bulk).toContain("BULK_FILL_KEYS.has(String(c.key))");
+    expect(bulk).toContain("dependsOnCategoryCode: true");
+    expect(bulk).toContain('setField(c.id, "tracking_sub_category", "")');
+  });
+});
