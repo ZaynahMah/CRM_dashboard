@@ -29,6 +29,7 @@ import {
 } from "@/lib/pnDropdowns";
 import { PN_TEMPLATES, PN_TYPES } from "@/config/pnOptions";
 import { campaignDateIso } from "@/lib/campaignDate";
+import { rowLabel } from "@/services/campaigns";
 import { listCustomOptions, addCustomOption } from "@/services/customOptions";
 import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 
@@ -704,13 +705,50 @@ export function BulkWorkspace({
       // One write per campaign UUID, as everywhere else in this app, but
       // batched so a 3,000-row save does not fire 3,000 parallel requests.
       const entries = Object.entries(dirty);
-      await inBatches(entries, ([id, patch]) => updateCampaign(id, patch),
-        (done, total) => setBatchProgress({ done, total }));
+
+      /**
+       * Per-row outcomes rather than abort-on-first-failure: RLS can reject
+       * one PN (on the calendar, not yours) while the rest save fine, and
+       * the user needs to know WHICH. It must never report "saved" for a
+       * row the database refused.
+       */
+      const rejected: { id: string; label: string; reason: string }[] = [];
+      const savedIds: string[] = [];
+
+      await inBatches(entries, async ([id, patch]) => {
+        try {
+          await updateCampaign(id, patch);
+          savedIds.push(id);
+        } catch (e) {
+          const c = campaigns.find((x) => x.id === id);
+          rejected.push({
+            id,
+            label: c ? rowLabel(c) : id,
+            reason: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }, (done, total) => setBatchProgress({ done, total }));
+
       await inBatches(Object.entries(dirtyQc), ([id, patch]) => saveQc(id, patch));
       setBatchProgress(null);
-      const n = dirtyCount;
-      setDirty({}); setDirtyQc({});
-      setDone(`Saved ${n} campaign${n === 1 ? "" : "s"}.`);
+
+      // Only the rows that actually saved stop being dirty, so a rejected
+      // edit is not silently discarded from the grid.
+      setDirty((prev) => {
+        const next = { ...prev };
+        for (const id of savedIds) delete next[id];
+        return next;
+      });
+      setDirtyQc({});
+
+      if (rejected.length > 0) {
+        setError(
+          `${savedIds.length} saved, ${rejected.length} rejected: `
+          + rejected.slice(0, 3).map((r) => `${r.label} — ${r.reason}`).join("; ")
+          + (rejected.length > 3 ? `, and ${rejected.length - 3} more.` : "."));
+      } else {
+        setDone(`Saved ${savedIds.length} campaign${savedIds.length === 1 ? "" : "s"}.`);
+      }
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

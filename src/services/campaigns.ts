@@ -104,9 +104,38 @@ export async function updateCampaign(id: string, patch: Partial<Campaign>) {
     throw new Error(`updateCampaign was called without a valid campaign id (got ${JSON.stringify(id)}).`);
   }
   const { data, error } = await supabase.from(TABLE).update(patch).eq("id", id).select().single();
-  if (error) throw error;
+
+  /**
+   * NO SILENT FAILURES.
+   *
+   * When RLS rejects the row, PostgREST updates nothing and `.single()`
+   * comes back with PGRST116 ("JSON object requested, multiple (or no) rows
+   * returned") — technically an error, but one no user can act on. Worse,
+   * a caller that ignored it would report success for a save that never
+   * happened: exactly how the Stage A edit bug stayed hidden.
+   *
+   * This translates it into something true and actionable.
+   */
+  if (error) {
+    if (error.code === "PGRST116" || /no rows|multiple \(or no\) rows/i.test(error.message)) {
+      throw new Error(NOT_EDITABLE);
+    }
+    throw error;
+  }
+  if (!data) throw new Error(NOT_EDITABLE);
   return data as Campaign;
 }
+
+/** Shown whenever a write affected zero rows. */
+export const NOT_EDITABLE =
+  "You can't edit this PN: it may be on the calendar, already submitted, or not yours.";
+
+/**
+ * Names a row for a per-row bulk failure, so a rejected PN can be found.
+ */
+export const rowLabel = (c: Partial<Campaign>) =>
+  `${c.campaign_name ?? "PN"} · ${c.launch_date ?? "no date"} · slot ${
+    c.slot_label ?? c.slot_number ?? "—"}`;
 
 /** RULE 7 — submitting locks the Category block through a database function. */
 export async function submitCategory(campaign: Campaign, userId: string) {
