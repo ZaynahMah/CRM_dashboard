@@ -116,8 +116,8 @@ export default function OverviewPage() {
       {/* ────── CRM DASHBOARD: uploads + add + review + routing + deadlines ────── */}
       {isCrm && (
         <>
-          <CrmInputUpload profileId={profile.id} onDone={reload} />
-          <CrmInputUpload profileId={profile.id} isCrmSelf onDone={reload} />
+          <CrmInputUpload profileId={profile.id} onDone={reload} existingCampaigns={campaigns} />
+          <CrmInputUpload profileId={profile.id} isCrmSelf onDone={reload} existingCampaigns={campaigns} />
 
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => { setUrgentMode(false); setCreating(true); }}>

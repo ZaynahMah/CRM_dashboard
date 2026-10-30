@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
-import { log, notify, runningPnCount, resetRunningPns } from "@/services/campaigns";
+import { log, notify } from "@/services/campaigns";
+import { BATCH_UPLOAD_ENABLED } from "@/lib/featureFlags";
+import {
+  addUploadBatch, fileSha256, previousUploadOfFile, previewByDay,
+  resetLastUploadPreview, resetLastUpload, sha256Of,
+  type DayPreview, type UploadBatchPreview,
+} from "@/services/uploadBatch";
+import { rememberedName, rememberName } from "@/services/sendBack";
 import { downloadCSV } from "@/services/exportExcel";
 import type { Campaign } from "@/types/campaign";
 import { profileSheet } from "@/lib/sheetProfile";
@@ -188,8 +195,12 @@ interface ReplacePreview {
   unaffected_stream: string;
 }
 
-export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
+export function CrmInputUpload({
+  profileId, isCrmSelf = false, onDone, existingCampaigns,
+}: {
   profileId: string; isCrmSelf?: boolean; onDone: () => void;
+  /** Current PNs, used only for the per-day duplicate preview. */
+  existingCampaigns?: Campaign[];
 }) {
   // This component is only rendered for CRM, but the Reset control is
   // gated explicitly rather than by assumption — and the server route
@@ -202,36 +213,30 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
   const [replacePreview, setReplacePreview] = useState<ReplacePreview | null>(null);
   /** Typed confirmation. The button stays disabled until it reads RESET. */
   const [confirmText, setConfirmText] = useState("");
-  /** Running PNs in THIS flow — the N shown before confirming. */
-  const [runningCount, setRunningCount] = useState(0);
+  /** Shared success line for the upload and the batch reset. */
+  const [toast, setToast] = useState<string | null>(null);
+  /** SHA-256 of the chosen file, for the "already uploaded" warning. */
+  const [fileHash, setFileHash] = useState<string | null>(null);
+  const [priorUpload, setPriorUpload] =
+    useState<{ created_at: string; file_name: string | null } | null>(null);
+  /** Per-day split of the chosen file: new versus already present. */
+  const [dayPreview, setDayPreview] = useState<DayPreview[]>([]);
+  /** Required on an upload and on a reset. Remembered per browser. */
+  const [uploadName, setUploadName] = useState(() => rememberedName());
+
+  /* ── Reset last upload ── */
+  const [batchPreview, setBatchPreview] = useState<UploadBatchPreview | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetTyped, setResetTyped] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [backup, setBackup] =
+    useState<{ sha: string; rowIds: string[]; fileName: string } | null>(null);
 
   const flowLabel = isCrmSelf ? "CRM Self" : "Category-led";
 
-  const refreshRunning = useCallback(() => {
-    if (!isCrm) return;
-    runningPnCount(isCrmSelf).then(setRunningCount).catch(() => setRunningCount(0));
-  }, [isCrm, isCrmSelf]);
 
-  useEffect(() => { refreshRunning(); }, [refreshRunning]);
 
-  const doReset = async () => {
-    setResetBusy(true); setResetError(null);
-    try {
-      const n = await resetRunningPns(isCrmSelf);
-      setResetOpen(false);
-      setToast(`${n} PNs reset. Upload a new file to start again.`);
-      refreshRunning();
-      onDone();
-    } catch (e) {
-      setResetError(e instanceof Error ? e.message : String(e));
-    }
-    setResetBusy(false);
-  };
   const [downloading, setDownloading] = useState(false);
 
   /**
@@ -258,16 +263,93 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
   const [reading, setReading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const refreshBatch = useCallback(() => {
+    if (!BATCH_UPLOAD_ENABLED || !isCrm) return;
+    resetLastUploadPreview(isCrmSelf)
+      .then(setBatchPreview).catch(() => setBatchPreview(null));
+  }, [isCrm, isCrmSelf]);
+
+  useEffect(() => { refreshBatch(); }, [refreshBatch]);
+
+  /** Fetches the server-generated backup for the batch, and keeps its hash. */
+  const downloadResetBackup = async () => {
+    if (!batchPreview) return;
+    setResetError(null);
+    const res = await fetch("/api/upload-backup", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ batchId: batchPreview.batch_id }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setResetError(body.error ?? `Backup failed (${res.status}).`);
+      return;
+    }
+    const blob = new Blob(["\uFEFF" + body.csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = body.fileName; a.click();
+    URL.revokeObjectURL(url);
+    setBackup({ sha: body.sha, rowIds: body.rowIds, fileName: body.fileName });
+  };
+
+  const doBatchReset = async () => {
+    if (!batchPreview || !backup) return;
+    setResetBusy(true); setResetError(null);
+    try {
+      /**
+       * The hash came from the server with the backup. It is presented
+       * back unchanged; `reset_last_upload()` re-derives the untouched set
+       * inside the transaction and refuses if it differs, so a row edited
+       * since the backup aborts the reset rather than removing a different
+       * set.
+       */
+      const removed = await resetLastUpload({
+        isCrmSelf, batchId: batchPreview.batch_id,
+        rowIds: backup.rowIds, backupSha: backup.sha,
+        backupName: backup.fileName, byName: uploadName.trim(),
+      });
+      rememberName(uploadName);
+      setResetOpen(false); setBackup(null); setResetTyped("");
+      setToast(`${removed} untouched PN(s) removed. Touched rows were kept.`);
+      refreshBatch();
+      onDone();
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : String(e));
+    }
+    setResetBusy(false);
+  };
+
   const handleFile = useCallback(async (file: File) => {
     setReading(true); setError(null); setResult(null); setParsed([]);
     setFileName(file.name);
+    setFileHash(null); setPriorUpload(null); setDayPreview([]);
     try {
       const buffer = await file.arrayBuffer();
       const { rows, warnings } = parseCrmInputFile(buffer, isCrmSelf);
       if (rows.length === 0) {
         setError(warnings.join(" ") || "No usable rows found in this file.");
       } else {
-        setParsed(assignSlotsIfMissing(rows));
+        const withSlots = assignSlotsIfMissing(rows);
+        setParsed(withSlots);
+
+        /**
+         * Add-only extras, flag-gated so the old path is untouched:
+         * a hash of the file for the "already uploaded" warning, and a
+         * per-day split of new versus already-present rows.
+         */
+        if (BATCH_UPLOAD_ENABLED) {
+          try {
+            const sha = await fileSha256(file);
+            setFileHash(sha);
+            setPriorUpload(await previousUploadOfFile(sha));
+            setDayPreview(previewByDay(
+              withSlots as unknown as Parameters<typeof previewByDay>[0],
+              existingCampaigns ?? []));
+          } catch {
+            // A failed warning must never block the upload itself.
+            setFileHash(null);
+          }
+        }
         if (warnings.length) setError(warnings.join(" "));
       }
     } catch (e) {
@@ -380,6 +462,29 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
     }));
 
     try {
+      /**
+       * FLAG ON  → `add_upload_batch()`: ADD-ONLY. Inserts and nothing else,
+       *            tagged with a batch so it can be undone.
+       * FLAG OFF → the existing `reset_campaigns_with_archive()` path,
+       *            byte-for-byte unchanged, so rolling back is one variable.
+       */
+      if (BATCH_UPLOAD_ENABLED) {
+        const id = await addUploadBatch(
+          campaigns as unknown as Record<string, unknown>[],
+          isCrmSelf, fileName, fileHash ?? "", uploadName.trim());
+        setProgress(null);
+        setParsed([]);
+        setToast(
+          `${campaigns.length} PN(s) added. Nothing existing was changed. `
+          + `You can reset this upload while no team has touched it.`);
+        await log(null, profileId,
+          isCrmSelf ? "CRM_SELF_PN_UPLOAD" : "CRM_INPUT_UPLOAD",
+          `${campaigns.length} rows added (batch ${id}).`);
+        setSending(false);
+        onDone();
+        return;
+      }
+
       const { data: batchId, error: resetErr } = await supabase.rpc(
         "reset_campaigns_with_archive",
         { p_rows: campaigns, p_is_crm_self: isCrmSelf }
@@ -426,7 +531,9 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
           <p className="mt-0.5 text-micro text-faint">
             {isCrmSelf
               ? "Campaigns CRM owns end-to-end — no Category input needed. Same columns: Day, Time, Slot, Segment, Category."
-              : "Columns: Day, Time, Slot, Segment, Category. Multiple PNs can share a slot — that's normal. This file is the source of truth: uploading replaces the RUNNING PNs of this stream only — campaigns already on the calendar, past Final QC or production-ready are kept."}
+              : BATCH_UPLOAD_ENABLED
+                ? "Columns: Day, Time, Slot, Segment, Category. Multiple PNs can share a slot — that's normal. Uploads are ADD-ONLY: this file adds PNs and never changes or removes anything that already exists. Uploads from before this update can't be reset here."
+                : "Columns: Day, Time, Slot, Segment, Category. Multiple PNs can share a slot — that's normal. This file is the source of truth: uploading replaces the RUNNING PNs of this stream only — campaigns already on the calendar, past Final QC or production-ready are kept."}
           </p>
         </div>
 
@@ -436,17 +543,67 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
         </label>
 
-        {/* CRM only. Hidden for every other role, and the server route
-            returns 403 regardless of what the UI shows. */}
-        {isCrm && (
-          <span title={runningCount === 0 ? "Nothing running" : undefined}>
-            <Button variant="danger" disabled={reading || runningCount === 0}
-              onClick={() => { setResetTyped(""); setResetError(null); setResetOpen(true); }}>
-              Reset{runningCount > 0 ? ` (${runningCount})` : ""}
+        {/* Undoes only the MOST RECENT batch of this stream, and only its
+            untouched rows. CRM only; the server checks the role again. */}
+        {BATCH_UPLOAD_ENABLED && isCrm && batchPreview && (
+          <span title={batchPreview.untouched === 0
+            ? "Nothing in the last upload is still untouched" : undefined}>
+            <Button variant="danger" disabled={reading || batchPreview.untouched === 0}
+              onClick={() => { setResetTyped(""); setResetError(null);
+                               setBackup(null); setResetOpen(true); }}>
+              Reset last upload ({batchPreview.untouched})
             </Button>
           </span>
         )}
+
       </div>
+
+      {BATCH_UPLOAD_ENABLED && priorUpload && (
+        <div className="mt-4 rounded-lg bg-warning-50 px-4 py-3 text-tiny text-warning-700">
+          This exact file was uploaded on {fmtDate(priorUpload.created_at.slice(0, 10))}
+          {priorUpload.file_name ? ` as "${priorUpload.file_name}"` : ""}. Uploading again
+          adds a second copy of any row that is not already present.
+        </div>
+      )}
+
+      {BATCH_UPLOAD_ENABLED && dayPreview.length > 0 && (
+        <div className="mt-4 rounded-lg border border-line">
+          <div className="border-b border-line px-4 py-2.5">
+            <span className="text-tiny font-600 text-heading">Before you confirm</span>
+            <span className="ml-2 text-micro text-faint">
+              Add-only — nothing existing is changed or removed.
+            </span>
+          </div>
+          <table className="w-full">
+            <thead><tr><th>Day</th><th>New</th><th>Already exist</th><th /></tr></thead>
+            <tbody>
+              {dayPreview.map((d) => (
+                <tr key={d.date}>
+                  <td className="text-tiny font-medium text-heading">{fmtDate(d.date)}</td>
+                  <td className="text-tiny tabular-nums text-success-700">{d.incoming}</td>
+                  <td className={`text-tiny tabular-nums ${
+                    d.alreadyExist > 0 ? "text-warning-700" : "text-muted"}`}>
+                    {d.alreadyExist}
+                  </td>
+                  <td className="text-micro text-warning-700">
+                    {d.isPast ? "past date" : ""}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {BATCH_UPLOAD_ENABLED && parsed.length > 0 && (
+        <label className="mt-4 block">
+          <span className="mb-1 block text-tiny font-medium text-body">
+            Your name <span className="text-danger-500">*</span>
+          </span>
+          <input value={uploadName} onChange={(e) => setUploadName(e.target.value)}
+            placeholder="Typed once, then remembered on this browser" />
+        </label>
+      )}
 
       {toast && (
         <div className="mt-4 flex items-start justify-between gap-2 rounded-lg bg-success-50 px-4 py-3 text-tiny text-success-700">
@@ -525,35 +682,73 @@ export function CrmInputUpload({ profileId, isCrmSelf = false, onDone }: {
         </div>
       )}
 
+      {/* Reset last upload: preview, server backup, typed name, typed RESET. */}
       <Modal open={resetOpen} onClose={() => setResetOpen(false)}
-        title={`Reset running ${flowLabel} PNs`}>
+        title="Reset last upload">
         <div className="space-y-4">
-          <p className="rounded-lg bg-danger-50 px-4 py-3 text-tiny text-danger-700">
-            This will reset <span className="font-medium">{runningCount}</span> running{" "}
-            {flowLabel} PNs to 0. They&rsquo;ll be moved to the archive.
-          </p>
-          <p className="text-tiny text-muted">
-            PNs already on the calendar, past Final QC or production-ready are not
-            touched, and neither is the archive or the activity history.
-          </p>
+          {batchPreview && (
+            <>
+              <p className="text-tiny text-muted">
+                {batchPreview.file_name ? `"${batchPreview.file_name}"` : "The last upload"}
+                {batchPreview.uploaded_name ? ` by ${batchPreview.uploaded_name}` : ""} ·{" "}
+                {fmtDate(batchPreview.uploaded_at.slice(0, 10))}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Pill dot={false} tone="danger"
+                  label={`${batchPreview.untouched} will be removed`} />
+                <Pill dot={false} tone="success"
+                  label={`${batchPreview.touched} kept — a team has touched them`} />
+              </div>
+              <p className="rounded-lg bg-[#FCFCFD] px-3 py-2 text-micro text-muted">
+                A row is kept if any team has entered a value, a status has moved,
+                it has QC, change-request, decision or content-change rows, it has
+                activity beyond the upload, it has defaulted, or it is on the
+                calendar. Anything that cannot be checked is kept.
+              </p>
+            </>
+          )}
+
           <div>
-            <label className="text-tiny text-muted">
-              Type <span className="font-mono font-medium text-heading">RESET</span> to confirm
-            </label>
-            <input value={resetTyped} onChange={(e) => setResetTyped(e.target.value)}
-              placeholder="RESET" className="mt-1 !font-mono" autoFocus />
+            <Button size="sm" variant="ghost" disabled={resetBusy || !batchPreview}
+              onClick={downloadResetBackup}>
+              {backup ? "Backup downloaded — download again" : "1. Download backup"}
+            </Button>
+            {backup && (
+              <p className="mt-1 text-micro text-success-700">
+                {backup.rowIds.length} row(s) saved to {backup.fileName}.
+              </p>
+            )}
           </div>
+
+          <label className="block">
+            <span className="mb-1 block text-tiny font-medium text-body">
+              2. Your name <span className="text-danger-500">*</span>
+            </span>
+            <input value={uploadName} onChange={(e) => setUploadName(e.target.value)} />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-tiny font-medium text-body">
+              3. Type <span className="font-mono text-heading">RESET</span> to confirm
+            </span>
+            <input value={resetTyped} onChange={(e) => setResetTyped(e.target.value)}
+              className="!font-mono" placeholder="RESET" />
+          </label>
+
           {resetError && (
             <p className="rounded-lg bg-danger-50 px-3 py-2 text-tiny text-danger-700">
               {resetError}
             </p>
           )}
+
           <div className="flex justify-end gap-3">
             <Button variant="ghost" disabled={resetBusy}
               onClick={() => setResetOpen(false)}>Cancel</Button>
-            <Button variant="danger" disabled={resetBusy || resetTyped !== "RESET"}
-              onClick={doReset}>
-              {resetBusy ? "Resetting..." : `Reset ${runningCount} PNs`}
+            <Button variant="danger"
+              disabled={resetBusy || !backup || resetTyped !== "RESET"
+                || uploadName.trim() === ""}
+              onClick={doBatchReset}>
+              {resetBusy ? "Removing..." : `Remove ${batchPreview?.untouched ?? 0} PNs`}
             </Button>
           </div>
         </div>
