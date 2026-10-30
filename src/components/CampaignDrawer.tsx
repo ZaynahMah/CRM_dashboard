@@ -13,6 +13,9 @@ import { trackingCheck, suggestTrackingFields } from "@/lib/trackingCode";
 import { CHANNEL_FORMATS, LANDING_VALUES } from "@/lib/trackingMasters";
 import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 import { optionsFor, isOffList } from "@/lib/pnDropdowns";
+import { PN_TEMPLATES, isLegacyTemplate, PN_TYPES } from "@/config/pnOptions";
+import { SendBackModal } from "./SendBackModal";
+import { canSendBack, sendBackToContent } from "@/services/sendBack";
 import {
   categoryErrors, draftFromCampaign, draftIsLockable, draftIsSavable, draftToPatch,
   isDateTimeLocal, legacyDateTimeNote, type CategoryDraft,
@@ -76,6 +79,12 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   const [pushDone, setPushDone] = useState<string | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  /* Send back to Content, from the drawer. Declared with the other hooks:
+     a useState below an early return breaks the rules-of-hooks order and
+     has crashed this app before. */
+  const [sendBackOpen, setSendBackOpen] = useState(false);
+  const [sendBackBusy, setSendBackBusy] = useState(false);
+  const [sendBackError, setSendBackError] = useState<string | null>(null);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [changeReason, setChangeReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -117,6 +126,27 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   /** Which mandatory Part 2 fields are still empty, for inline errors. */
   const missingKeys = missingPart2Keys(campaign);
 
+
+  /**
+   * Why the button is disabled, if it is. `canSendBack` mirrors the SQL
+   * guards, and its messages are shown rather than the button being hidden.
+   */
+  const sendBackGate = canSendBack(campaign);
+
+  const runDrawerSendBack = async (
+    input: { reason: string; byName: string; field?: string }
+  ) => {
+    setSendBackBusy(true); setSendBackError(null);
+    try {
+      await sendBackToContent(campaign.id, input);
+      setSendBackOpen(false);
+      await refresh();
+    } catch (e) {
+      setSendBackError(e instanceof Error ? e.message : String(e));
+    }
+    setSendBackBusy(false);
+  };
+
   const tracking = trackingCheck(suggestTrackingFields(campaign));
   /**
    * The PERSISTED code, not merely "the fields look complete".
@@ -141,7 +171,16 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   };
 
   return (
-    <Drawer open onClose={onClose}>
+    <>
+      <SendBackModal
+        campaigns={[campaign]}
+        open={sendBackOpen}
+        busy={sendBackBusy}
+        error={sendBackError}
+        onClose={() => { setSendBackOpen(false); setSendBackError(null); }}
+        onConfirm={runDrawerSendBack}
+        z="z-[90]" />
+      <Drawer open onClose={onClose}>
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-line bg-surface px-6 py-4">
         <div className="flex items-start justify-between gap-4">
@@ -186,6 +225,28 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
               {campaign.send_back_by_name ?? "CRM"}
               {campaign.send_back_at ? ` · ${fmtRelative(campaign.send_back_at)}` : ""}
             </p>
+          </div>
+        )}
+
+        {/* CRM only. ALWAYS shown when Content has been involved — disabled
+            with the reason rather than hidden, so CRM can see why it cannot
+            act. Eligibility is re-checked in Postgres by
+            send_back_to_content(). */}
+        {role === "CRM" && campaign.content_status !== "NOT_ASSIGNED" && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span title={sendBackGate.ok ? undefined : sendBackGate.reason}>
+              <Button size="sm" variant="ghost" disabled={!sendBackGate.ok}
+                onClick={() => { setSendBackError(null); setSendBackOpen(true); }}>
+                Send back to Content
+              </Button>
+            </span>
+            {!sendBackGate.ok && (
+              <span className="text-micro text-faint">{sendBackGate.reason}</span>
+            )}
+            {(campaign.send_back_count ?? 0) > 0 && (
+              <Pill dot={false} tone="warning"
+                label={`Sent back ${campaign.send_back_count}×`} />
+            )}
           </div>
         )}
 
@@ -311,11 +372,24 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
                   <Field label="PN Template" required>
                     {/* Options and their order are unchanged. "Select" is the
                         placeholder and does not count as filled. */}
+                    {/* Ten options from one shared constant. An OLD stored
+                        value (e.g. "Coloured BG") stays selectable so the row
+                        is never silently rewritten. */}
                     <select defaultValue={campaign.pn_template ?? ""}
                       onChange={(e) => save({ pn_template: e.target.value })}>
                       <option value="">Select</option>
-                      {["Basic","Bezel","Timer","Coloured BG"].map((t) => <option key={t}>{t}</option>)}
+                      {isLegacyTemplate(campaign.pn_template) && (
+                        <option value={campaign.pn_template ?? ""}>
+                          {campaign.pn_template}
+                        </option>
+                      )}
+                      {PN_TEMPLATES.map((t) => <option key={t}>{t}</option>)}
                     </select>
+                    {isLegacyTemplate(campaign.pn_template) && (
+                      <p className="mt-1 text-micro text-warning-700">
+                        not in list — pick a current template when convenient
+                      </p>
+                    )}
                     <FieldError show={missingKeys.includes("pn_template")} label="PN Template" />
                   </Field>
                   <Field label="Creative Requirements" required>
@@ -608,6 +682,7 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
         </div>
       </Modal>
     </Drawer>
+    </>
   );
 }
 

@@ -27,6 +27,8 @@ import {
   optionsFor, subcategoriesFor, isSubcategoryValid, isOffList,
   BULK_FILL_KEYS, isValidNewBrandCode, mergeOptions, isDuplicateOption,
 } from "@/lib/pnDropdowns";
+import { PN_TEMPLATES, PN_TYPES } from "@/config/pnOptions";
+import { campaignDateIso } from "@/lib/campaignDate";
 import { listCustomOptions, addCustomOption } from "@/services/customOptions";
 import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 
@@ -272,6 +274,8 @@ const CONTENT_INPUT_COLUMNS: ColumnDef[] = [
   { key: "additional_notes", label: "Remarks", width: 190, type: "readonly", longText: true },
   { key: "header", label: "Header", width: 260, longText: true },
   { key: "sub_copy_text", label: "Sub Copy", width: 280, longText: true },
+  // Content's fifth input. Editable here; read-only in every other grid.
+  { key: "pn_type", label: "PN Type", width: 110, type: "select", options: PN_TYPES },
   { key: "reference_link", label: "Reference Link", width: 170 },
 ];
 
@@ -307,7 +311,10 @@ const CATEGORY_COLUMNS: ColumnDef[] = [
   // Still editable by CRM, exactly as before.
   { key: "title_brief", label: "Title Brief", width: 220, longText: true },
   { key: "message_brief", label: "Message Brief", width: 230, longText: true },
-  { key: "pn_template", label: "PN Template", width: 140 },
+  // Ten options from src/config/pnOptions. An old stored value still shows,
+  // flagged "not in list" by the off-list check in TrackingCell.
+  { key: "pn_template", label: "PN Template", width: 170, type: "select",
+    options: PN_TEMPLATES },
   { key: "creative_requirements", label: "Creative Reqs", width: 200, longText: true },
 ];
 
@@ -335,6 +342,7 @@ const QC_COLUMNS: ColumnDef[] = [
   { group: "Content", key: "sub_copy_text", label: "Sub Copy", width: 200 },
   { group: "Content", key: "h_count", label: "H Count", width: 80, type: "readonly" },
   { group: "Content", key: "s_count", label: "S Count", width: 80, type: "readonly" },
+  { group: "Content", key: "pn_type", label: "PN Type", width: 100, type: "readonly" },
   { group: "Content", key: "creative_link", label: "Creative Link", width: 190 },
   { group: "Tracking", key: "sound", label: "Sound", width: 70, type: "bool" },
   { group: "Tracking", key: "global_limit", label: "GL", width: 60, type: "bool" },
@@ -414,6 +422,12 @@ export function BulkWorkspace({
    * `visibleCampaigns` for why selection is pruned alongside it.
    */
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES_LABEL);
+  /**
+   * Date filter on the PN's own campaign date. Both ends optional and
+   * inclusive; it combines with the category filter.
+   */
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   /**
    * Ticks every minute so the "2d 5h left" countdowns stay live without a
    * reload. One timer for the whole grid, not one per row.
@@ -790,8 +804,27 @@ export function BulkWorkspace({
    * was the risk: select 60 rows, filter to Electronics, press Lock, and
    * submit 60 instead of the 8 on screen.
    */
-  const visibleCampaigns = useMemo(
-    () => filterByCategory(campaigns, categoryFilter), [campaigns, categoryFilter]);
+  const visibleCampaigns = useMemo(() => {
+    let rows = filterByCategory(campaigns, categoryFilter);
+    if (fromDate || toDate) {
+      rows = rows.filter((c) => {
+        const d = campaignDateIso(c.launch_date);
+        /**
+         * A PN with no usable date is KEPT when a date filter is on, rather
+         * than silently dropped — hiding a dateless PN is how one gets
+         * forgotten. It simply cannot be narrowed by date.
+         */
+        if (d === null) return true;
+        if (fromDate && d < fromDate) return false;
+        if (toDate && d > toDate) return false;
+        return true;
+      });
+    }
+    return rows;
+  }, [campaigns, categoryFilter, fromDate, toDate]);
+
+  const filtersActive =
+    categoryFilter !== ALL_CATEGORIES_LABEL || fromDate !== "" || toDate !== "";
 
   useEffect(() => {
     const visibleIds = new Set(visibleCampaigns.map((c) => c.id));
@@ -921,10 +954,26 @@ export function BulkWorkspace({
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-          {categoryFilter !== ALL_CATEGORIES_LABEL && (
-            <span className="text-micro text-muted">
-              {visibleCampaigns.length} of {campaigns.length} shown
-            </span>
+          {/* Date filter, on the PN's campaign date. Both ends optional. */}
+          <input type="date" aria-label="From date" value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="!m-0 !w-[140px] !py-1 !text-[12px]" />
+          <input type="date" aria-label="To date" value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="!m-0 !w-[140px] !py-1 !text-[12px]" />
+          {filtersActive && (
+            <>
+              <Button size="sm" variant="ghost"
+                onClick={() => {
+                  setCategoryFilter(ALL_CATEGORIES_LABEL);
+                  setFromDate(""); setToDate("");
+                }}>
+                Clear
+              </Button>
+              <span className="text-micro text-muted">
+                Showing {visibleCampaigns.length} of {campaigns.length} PNs
+              </span>
+            </>
           )}
           {isQc && (
             <>

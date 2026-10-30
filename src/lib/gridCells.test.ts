@@ -298,7 +298,9 @@ describe("the scroll stutter fix", () => {
     const i = bulk.indexOf("const QC_COLUMNS");
     const blk = bulk.slice(i, bulk.indexOf("];", i));
     const keys = [...blk.matchAll(/key: "([a-z_0-9]+)"/g)].map((m) => m[1]);
-    expect(keys).toHaveLength(42);
+    // 43 since PN Type (Content's fifth input) joined the Final QC grid.
+    expect(keys).toHaveLength(43);
+    expect(keys).toContain("pn_type");
     expect(keys).toContain("segment_1");
     expect(keys).toContain("tracking_sub_category");
     // Bulk fill, Sub Cat dependency and the z-index fix are untouched.

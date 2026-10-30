@@ -89,6 +89,7 @@ const BASE_COLUMNS: [string, (c: Campaign) => unknown][] = [
 /** Everything Content enters, added for the Content-led export. */
 const CONTENT_COLUMNS: [string, (c: Campaign) => unknown][] = [
   ["Header",          (c) => c.header],
+  ["PN Type",         (c) => c.pn_type],
   ["Sub Copy",        (c) => c.sub_copy_text],
   ["H Count",         (c) => c.h_count],
   ["S Count",         (c) => c.s_count],

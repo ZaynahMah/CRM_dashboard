@@ -102,6 +102,8 @@ export interface Campaign {
   // Content/Creative — migration 06
   header: string | null;
   sub_copy_text: string | null;
+  /** Content-owned. SALE or BAU, or null on PNs predating the field. */
+  pn_type: string | null;
   h_count: number | null;
   s_count: number | null;
 

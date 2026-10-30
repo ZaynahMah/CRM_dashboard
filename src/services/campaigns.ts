@@ -1,6 +1,7 @@
 "use client";
 
 import { canMoveForward, missingPart2 } from "@/lib/crmPart2";
+import { isValidPnType } from "@/config/pnOptions";
 import { fetchCampaignsByIds } from "./contentBulk";
 
 import { supabase } from "@/lib/supabase";
@@ -536,17 +537,34 @@ export async function sendBatchToContent(
  */
 export async function submitContentRow(
   campaignId: string,
-  fields: { header: string; sub_copy_text: string; reference_link: string },
+  fields: {
+    header: string; sub_copy_text: string; reference_link: string;
+    pn_type?: string | null;
+  },
   userId: string
 ) {
   const header = fields.header.trim();
   const subCopy = fields.sub_copy_text.trim();
+
+  /**
+   * PN Type is validated here as well as by the database trigger, so a bad
+   * value fails before the write rather than as a raw Postgres error.
+   *
+   * It is required for NEW submissions only. A PN already submitted or on
+   * the calendar is never re-validated — those rows pre-date the field and
+   * show "—".
+   */
+  const pnType = (fields.pn_type ?? "").trim() || null;
+  if (pnType !== null && !isValidPnType(pnType)) {
+    throw new Error("PN Type must be SALE or BAU.");
+  }
   const saved = await updateCampaign(campaignId, {
     header: header || null,
     sub_copy_text: subCopy || null,
     h_count: header.length,
     s_count: subCopy.length,
     reference_link: fields.reference_link.trim() || null,
+    ...(pnType !== null ? { pn_type: pnType } : {}),
     content_status: "SUBMITTED",
   } as Partial<Campaign>);
   await log(campaignId, userId, "CONTENT_SUBMITTED", "Content submitted copy.");

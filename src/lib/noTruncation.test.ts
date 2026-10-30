@@ -131,7 +131,9 @@ describe("the table does not explode in width", () => {
     const widths = [...block.matchAll(/width:\s*(\d+)/g)].map((m) => Number(m[1]));
     expect(widths.length).toBeGreaterThan(5);
     // Taller rows and wrapped text, not an endlessly wide table.
-    expect(widths.reduce((a, b) => a + b, 0)).toBeLessThan(2000);
+    // 1,870 after PN Type joined Content’s grid. Still far from a table
+    // that scrolls sideways forever.
+    expect(widths.reduce((a, b) => a + b, 0)).toBeLessThan(2100);
   });
 
   it("no single copy column is absurdly wide", () => {

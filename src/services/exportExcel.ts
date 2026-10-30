@@ -12,7 +12,7 @@ import { slotDisplay } from "@/lib/format";
 const COLUMNS = [
   "Date","TIME","SLOT","SEGMENTS","CATEGORY","SUB CATEGORY","BRAND","OFFER",
   "Category Briefs","Title Brief","Message Brief","PN Template","creative requirements",
-  "HEADER","SUB COPY","H COUNT","S COUNT","Reference Link","Slots","Creative links",
+  "HEADER","SUB COPY","PN TYPE","H COUNT","S COUNT","Reference Link","Slots","Creative links",
   "Landing links","COLLAPSE ID","OPS DETAILS","SOUND","GL",
   "Campaign Type","Campaign name","Channel Name","Channel Format",
   "Segment 1","Segment 2","Category","SubCategory","Brand","Landing","Offer",
@@ -62,6 +62,7 @@ export function campaignsToCSV(campaigns: Campaign[]): string {
       c.creative_requirements ?? "",
       c.header ?? "",
       c.sub_copy_text ?? "",
+      c.pn_type ?? "",
       c.h_count ?? "",
       c.s_count ?? "",
       c.reference_link ?? "",
