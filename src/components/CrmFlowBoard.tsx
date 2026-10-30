@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import type { Campaign } from "@/types/campaign";
 import { Button, Card, Pill } from "./ui";
+import { SendBackModal } from "./SendBackModal";
+import { bulkSendBackToContent } from "@/services/sendBack";
 import {
   incomingFromCategoryCsv, incomingFromContentCsv, sectionFileName, downloadSection,
 } from "@/services/crmSectionExport";
@@ -52,6 +54,11 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
   staleIds?: Set<string>;
   onReloadRow?: (id: string) => void;
 }) {
+  const [sendBackRows, setSendBackRows] = useState<Campaign[]>([]);
+  const [sendBackBusy, setSendBackBusy] = useState(false);
+  const [sendBackError, setSendBackError] = useState<string | null>(null);
+  const [sendBackDone, setSendBackDone] = useState<string | null>(null);
+
   const categoryLed = useMemo(() => campaigns.filter((c) => !c.is_crm_self), [campaigns]);
   const crmSelf = useMemo(() => campaigns.filter((c) => c.is_crm_self), [campaigns]);
 
@@ -61,6 +68,19 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
     // are reported with what each is missing.
     run: (ids) => sendBatchToContent(ids, profileId),
   };
+  /**
+   * Send back to Content. Available from Pending CRM Review and Ready for
+   * Final QC, for both streams. Opens the modal rather than acting at once,
+   * because a reason and a name are required.
+   */
+  const sendBack: Action = {
+    label: "Send Back to Content",
+    run: async (ids) => {
+      setSendBackRows(campaigns.filter((c) => ids.includes(c.id)));
+      return [];
+    },
+  };
+
   const markReviewed: Action = {
     label: "Mark reviewed",
     run: async (ids) => { for (const id of ids) await markCopyReviewed(id, profileId); },
@@ -196,12 +216,14 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
           hint: "Content submitted — CRM review pending",
           rows: categoryLed.filter((c) => fromContentPending(c, qc)),
           action: markReviewed,
+          secondaryAction: sendBack,
         }}
         completed={{
           label: "Ready for Final QC",
           hint: "CRM reviewed — ready for Final QC and calendar",
           rows: categoryLed.filter((c) => fromContentReady(c, qc)),
           action: pushToCalendar,
+          secondaryAction: sendBack,
         }}
         inFlight={{
           label: "Still with Content",
@@ -256,12 +278,14 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
           hint: "Content submitted — CRM review pending",
           rows: crmSelf.filter((c) => fromContentPending(c, qc)),
           action: markReviewed,
+          secondaryAction: sendBack,
         }}
         completed={{
           label: "Ready for Final QC",
           hint: "CRM reviewed — ready for Final QC and calendar",
           rows: crmSelf.filter((c) => fromContentReady(c, qc)),
           action: pushToCalendar,
+          secondaryAction: sendBack,
         }}
         inFlight={{
           label: "Still with Content",
@@ -312,6 +336,8 @@ interface BucketSpec {
   hint: string;
   rows: Campaign[];
   action?: Action;
+  /** Optional second action, shown beside the primary one. */
+  secondaryAction?: Action;
   footer?: string;
 }
 
@@ -524,13 +550,24 @@ function Bucket({ spec, tone, onChanged, onOpen }: {
         </>
       )}
 
-      {(action || spec.footer) && (
+      {(action || spec.secondaryAction || spec.footer) && (
         <div className="flex flex-wrap items-center gap-3 px-5 pb-3.5 pt-1">
           {action && (
             <Button size="sm" disabled={busy || selected.size === 0} onClick={run}>
               {busy
                 ? <><span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" /> Working...</>
                 : selected.size > 0 ? `${action.label} (${selected.size})` : action.label}
+            </Button>
+          )}
+          {/* Send back to Content, beside the primary action. Uses the same
+              selection; the modal collects the reason and name. */}
+          {spec.secondaryAction && (
+            <Button size="sm" variant="ghost"
+              disabled={busy || selected.size === 0}
+              onClick={() => { void spec.secondaryAction!.run([...selected]); }}>
+              {selected.size > 0
+                ? `${spec.secondaryAction.label} (${selected.size})`
+                : spec.secondaryAction.label}
             </Button>
           )}
           {spec.footer && <span className="text-micro text-faint">{spec.footer}</span>}

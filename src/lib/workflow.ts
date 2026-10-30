@@ -131,7 +131,16 @@ export function notReadyReason(c: Campaign): string | null {
 
 /** Character ceilings for push copy. */
 export const HEADER_LIMIT = 60;
-export const SUB_COPY_LIMIT = 100;
+/**
+ * Sub Copy character limit. Raised from 100 to 200.
+ *
+ * THE single definition: the drawer, the Show All PN grid, the import
+ * preview and the import/export validation all read it, and `s_count` is
+ * derived with `.length` rather than validated against a second number, so
+ * nothing else needs changing. There is no database constraint on
+ * `sub_copy_text` — it is plain `text`.
+ */
+export const SUB_COPY_LIMIT = 200;
 
 export const REQUIRED_CATEGORY_FIELDS: (keyof Campaign)[] = [
   "campaign_name", "category", "sub_category", "brand",

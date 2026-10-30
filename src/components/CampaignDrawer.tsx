@@ -165,6 +165,30 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
 
       <div className="space-y-3 p-5">
 
+        {/* CRM sent this back for a fix. At the TOP, visible to every role
+            that opens the PN, so Content cannot miss why it returned. */}
+        {campaign.content_status === "NEEDS_CHANGES" && campaign.send_back_reason && (
+          <div className="mb-4 rounded-lg border border-[#FECDCA] bg-danger-50 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-tiny font-600 text-danger-700">
+                Sent back by CRM{campaign.send_back_field
+                  ? ` — ${campaign.send_back_field}` : ""}
+              </span>
+              {(campaign.send_back_count ?? 0) > 1 && (
+                <Pill dot={false} tone="warning"
+                  label={`Send-back #${campaign.send_back_count}`} />
+              )}
+            </div>
+            <p className="mt-1 whitespace-pre-wrap text-tiny text-danger-700">
+              {campaign.send_back_reason}
+            </p>
+            <p className="mt-1 text-micro text-faint">
+              {campaign.send_back_by_name ?? "CRM"}
+              {campaign.send_back_at ? ` · ${fmtRelative(campaign.send_back_at)}` : ""}
+            </p>
+          </div>
+        )}
+
         {/* ── PART 1: CRM Scheduling ── */}
         <Block title="Part 1 — CRM Scheduling" tag="CRM" tagColor="indigo">
           {role === "CRM" ? (

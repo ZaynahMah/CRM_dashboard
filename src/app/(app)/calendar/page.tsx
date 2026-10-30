@@ -21,7 +21,7 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
  */
 export default function CalendarPage() {
   const { profile } = useSession();
-  const { campaigns, loading, reload } = useCampaigns();
+  const { campaigns, loading, error, reload } = useCampaigns();
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -40,6 +40,27 @@ export default function CalendarPage() {
 
   if (!profile) return null;
   if (loading) return <Loading label="Loading the calendar" />;
+
+  /**
+   * A failed load previously rendered as an empty list with no message —
+   * indistinguishable from "there is no data". `error` was returned by
+   * useCampaigns and simply not destructured here, so any RLS, network or
+   * query failure looked like "nothing happens".
+   */
+  if (error) {
+    return (
+      <Card>
+        <p className="text-tiny text-danger-700">
+          Could not load campaigns: {error}
+        </p>
+        <button onClick={() => reload()}
+          className="mt-2 text-tiny font-medium text-indigo-700 hover:underline">
+          Try again
+        </button>
+      </Card>
+    );
+  }
+
 
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
   const firstDay = (new Date(cursor.getFullYear(), cursor.getMonth(), 1).getDay() + 6) % 7;
