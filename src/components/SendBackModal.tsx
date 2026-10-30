@@ -14,13 +14,17 @@ import {
  * remembered per browser, so it is typed once rather than on every
  * send-back — shared team logins mean it is the only real identity.
  */
-export function SendBackModal({ campaigns, open, busy, error, onClose, onConfirm }: {
+export function SendBackModal({
+  campaigns, open, busy, error, onClose, onConfirm, z,
+}: {
   campaigns: Campaign[];
   open: boolean;
   busy: boolean;
   error: string | null;
   onClose: () => void;
   onConfirm: (input: { reason: string; byName: string; field?: string }) => void;
+  /** Pass a value above z-[70] when opening from inside Show All PN. */
+  z?: string;
 }) {
   const [reason, setReason] = useState("");
   const [field, setField] = useState("");
@@ -32,7 +36,7 @@ export function SendBackModal({ campaigns, open, busy, error, onClose, onConfirm
   const ready = reason.trim() !== "" && name.trim() !== "" && eligible.length > 0;
 
   return (
-    <Modal open={open} onClose={onClose}
+    <Modal open={open} onClose={onClose} z={z}
       title={campaigns.length === 1 ? "Send back to Content"
         : `Send ${campaigns.length} PNs back to Content`}>
       <div className="space-y-4">

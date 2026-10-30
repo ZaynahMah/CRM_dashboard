@@ -12,6 +12,8 @@ import {
   pnDeadlineDate, timeLeftLabel, deadlinePassed, deadlineImminent,
 } from "@/lib/deadlines";
 import { Button, Pill } from "./ui";
+import { SendBackModal } from "./SendBackModal";
+import { bulkSendBackToContent } from "@/services/sendBack";
 import {
   CAMPAIGN_CATEGORY_FILTER_OPTIONS, ALL_CATEGORIES_LABEL, filterByCategory,
 } from "@/lib/categoryFilter";
@@ -703,6 +705,41 @@ export function BulkWorkspace({
     setBusy(null);
   };
 
+  /* ── Bulk send back to Content (Final QC only) ── */
+  const [sendBackOpen, setSendBackOpen] = useState(false);
+  const [sendBackBusy, setSendBackBusy] = useState(false);
+  const [sendBackError, setSendBackError] = useState<string | null>(null);
+
+  const selectedRows = useMemo(
+    () => campaigns.filter((c) => selected.has(c.id)), [campaigns, selected]);
+
+  const runSendBack = async (input: { reason: string; byName: string; field?: string }) => {
+    setSendBackBusy(true); setSendBackError(null);
+    try {
+      /**
+       * Unsaved edits are flushed first, exactly as runPrimary does, so a
+       * send-back never acts on a version of the row the user cannot see.
+       */
+      if (dirtyCount > 0) await saveAll();
+      const outcomes = await bulkSendBackToContent(selectedRows, input);
+      const ok = outcomes.filter((o) => o.ok).length;
+      const blocked = outcomes.filter((o) => !o.ok);
+      setSendBackOpen(false);
+      setSelected(new Set());
+      setDone(
+        `${ok} PN${ok === 1 ? "" : "s"} sent back to Content.`
+        + (blocked.length > 0
+          ? ` ${blocked.length} could not be sent: ${
+              blocked.slice(0, 3).map((b) => `${b.campaignName} — ${b.reason}`).join("; ")}`
+            + (blocked.length > 3 ? `, and ${blocked.length - 3} more.` : ".")
+          : ""));
+      onSaved();
+    } catch (e) {
+      setSendBackError(e instanceof Error ? e.message : String(e));
+    }
+    setSendBackBusy(false);
+  };
+
   const runPrimary = async () => {
     if (selected.size === 0) return;
     setBusy("primary"); setError(null); setDone(null);
@@ -817,6 +854,15 @@ export function BulkWorkspace({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
+      <SendBackModal
+        campaigns={selectedRows}
+        open={sendBackOpen}
+        busy={sendBackBusy}
+        error={sendBackError}
+        onClose={() => { setSendBackOpen(false); setSendBackError(null); }}
+        onConfirm={runSendBack}
+        z="z-[80]" />
+
       {/* No click-outside-to-close: in a grid this dense, a misplaced click
           would throw away a screen of unsaved work. Only the X closes. */}
       <div className="flex h-[92vh] w-[88vw] flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-pop">
@@ -848,6 +894,18 @@ export function BulkWorkspace({
           <Button size="sm" disabled={busy !== null || selected.size === 0} onClick={runPrimary}>
             {busy === "primary" ? "Working..." : `${primaryLabel}${selected.size ? ` (${selected.size})` : ""}`}
           </Button>
+
+          {/* Send the selected PNs back to Content for a rewrite. Only in
+              Final QC, where CRM is reviewing copy. The modal collects the
+              reason and the typed name; eligibility is re-checked in
+              Postgres by send_back_to_content(). */}
+          {isQc && (
+            <Button size="sm" variant="ghost"
+              disabled={busy !== null || selected.size === 0}
+              onClick={() => { setSendBackError(null); setSendBackOpen(true); }}>
+              Bulk Send Back to Content ({selected.size})
+            </Button>
+          )}
 
           {/* Category filter, beside the primary action. Controlled list —
               never built from historical records. Changing it prunes the

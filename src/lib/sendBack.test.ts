@@ -192,3 +192,66 @@ describe("Content sees the reason", () => {
     expect(read("../services/contentBulk.ts")).toContain('c.content_status === "NEEDS_CHANGES"');
   });
 });
+
+/* ══════════ Bulk send back from Show All PN ══════════ */
+describe("bulk send back, beside Bulk Push To Calendar", () => {
+  const bulk = read("../components/BulkWorkspace.tsx");
+  const ui = read("../components/ui.tsx");
+  const modal = read("../components/SendBackModal.tsx");
+
+  it("sits beside the primary action in Final QC", () => {
+    expect(bulk).toContain("Bulk Send Back to Content (");
+    expect(bulk.indexOf("{primaryLabel}"))
+      .toBeLessThan(bulk.indexOf("Bulk Send Back to Content ("));
+  });
+
+  it('the primary there is "Bulk Push To Calendar"', () => {
+    expect(bulk).toContain('mode === "FINAL_QC" ? "Bulk Push To Calendar"');
+  });
+
+  it("appears ONLY in Final QC, not in the other grids", () => {
+    expect(bulk).toContain("{isQc && (");
+    const btn = bulk.slice(bulk.indexOf("Bulk Send Back to Content (") - 400,
+                           bulk.indexOf("Bulk Send Back to Content ("));
+    expect(btn).toContain("isQc &&");
+  });
+
+  it("is disabled until rows are selected", () => {
+    const btn = bulk.slice(bulk.indexOf("{isQc && ("),
+                           bulk.indexOf("Bulk Send Back to Content ("));
+    expect(btn).toContain("selected.size === 0");
+  });
+
+  it("flushes unsaved edits first, like the primary action", () => {
+    expect(bulk).toContain("if (dirtyCount > 0) await saveAll();");
+  });
+
+  it("reports blocked rows rather than failing the batch", () => {
+    expect(bulk).toContain("blocked.length > 0");
+    expect(bulk).toContain("could not be sent:");
+  });
+
+  it("clears the selection after sending", () => {
+    expect(bulk).toContain("setSelected(new Set());");
+  });
+
+  /* The z-index trap, same class as the dropdown bug. */
+  it("the modal renders ABOVE the workspace", () => {
+    expect(bulk).toContain('z="z-[80]"');
+    const modalZ = 80;
+    const workspaceZ = Number(bulk.match(/fixed inset-0 z-\[(\d+)\]/)![1]);
+    expect(modalZ).toBeGreaterThan(workspaceZ);
+  });
+
+  it("Modal takes a stacking prop, defaulting to the old value", () => {
+    expect(ui).toContain('z = "z-50"');
+    expect(ui).toContain("fixed inset-0 ${z}");
+    expect(modal).toContain("z={z}");
+  });
+
+  it("eligibility is still enforced in Postgres", () => {
+    const svc = read("../services/sendBack.ts");
+    expect(svc).toContain("bulkSendBackToContent");
+    expect(sql).toContain("c.calendar_status = 'UPDATED'");
+  });
+});

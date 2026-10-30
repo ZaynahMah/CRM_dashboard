@@ -171,9 +171,17 @@ export function Tabs({ tabs, active, onChange }: {
 
 /* ---------------- overlays ---------------- */
 
-export function Modal({ open, onClose, title, sub, children, width = "max-w-lg" }: {
+export function Modal({
+  open, onClose, title, sub, children, width = "max-w-lg", z = "z-50",
+}: {
   open: boolean; onClose: () => void; title: string; sub?: string;
   children: React.ReactNode; width?: string;
+  /**
+   * Stacking context. The default sits above the page; a modal opened from
+   * INSIDE the Show All PN workspace (z-[70]) must pass a higher value or it
+   * renders behind it — the same trap that hid the tracking dropdowns.
+   */
+  z?: string;
 }) {
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -183,7 +191,7 @@ export function Modal({ open, onClose, title, sub, children, width = "max-w-lg" 
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#101828]/40 p-4 backdrop-blur-[2px]">
+    <div className={`fixed inset-0 ${z} overflow-y-auto bg-[#101828]/40 p-4 backdrop-blur-[2px]`}>
       <div className={`mx-auto mt-10 w-full ${width} rounded-2xl border border-line bg-surface shadow-pop`}>
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
           <div>
