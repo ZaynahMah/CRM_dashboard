@@ -96,3 +96,34 @@ export const rememberedName = () => {
 export const rememberName = (n: string) => {
   try { localStorage.setItem(NAME_KEY, n.trim()); } catch { /* ignore */ }
 };
+
+
+/* ───────────────────────── remove from calendar ───────────────────────── */
+
+/**
+ * CRM takes a PN back OFF the calendar.
+ *
+ * The only way to edit a finalised PN: it sets `calendar_status` back,
+ * resets `qc_status` to pending (the checklist TICKS ARE KEPT) and logs it,
+ * so the PN can return only through Final QC.
+ *
+ * `qc_status` is blocked for non-CRM by `enforce_column_ownership()`, and
+ * the whole thing must land together, so it runs in a SECURITY DEFINER
+ * function rather than from the browser.
+ */
+export async function removeFromCalendar(
+  campaignId: string, byName: string, reason?: string
+): Promise<Campaign> {
+  const { data, error } = await supabase.rpc("remove_from_calendar", {
+    p_campaign_id: campaignId,
+    p_by_name: byName.trim(),
+    p_reason: reason?.trim() || null,
+  });
+  if (error) {
+    if (/does not exist|schema cache/i.test(error.message)) {
+      throw new Error("Not set up yet — migration 34 has not been run.");
+    }
+    throw new Error(error.message);
+  }
+  return data as Campaign;
+}

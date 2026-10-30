@@ -76,6 +76,9 @@ export async function saveImportedContent(
           changed_fields: changed, changed_by: profileId, source: "IMPORT" });
       }
       await updateCampaign(r.campaignId, {
+        // Only written when the sheet supplied one, so an older PN with a
+        // blank cell keeps its existing value rather than being cleared.
+        ...(r.pn_type ? { pn_type: r.pn_type } : {}),
         header: r.header || null,
         sub_copy_text: r.sub_copy_text || null,
         h_count: countOf(r.header),

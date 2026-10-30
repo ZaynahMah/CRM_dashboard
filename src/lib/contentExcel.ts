@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { isValidPnType } from "@/config/pnOptions";
 import type { Campaign } from "@/types/campaign";
 import { fmtDate, fmtTime } from "./format";
 
@@ -31,7 +32,7 @@ export const READONLY_COLUMNS = [
 ] as const;
 
 export const EDITABLE_COLUMNS = [
-  "Header", "Sub Copy", "H Count", "S Count", "Reference Link",
+  "Header", "Sub Copy", "PN Type", "H Count", "S Count", "Reference Link",
 ] as const;
 
 export const ALL_COLUMNS = [ID_COLUMN, ...READONLY_COLUMNS, ...EDITABLE_COLUMNS] as const;
@@ -62,6 +63,7 @@ export function campaignToRow(c: Campaign): Record<string, string | number> {
     "Creative Requirements": c.creative_requirements ?? "",
     "Header": c.header ?? "",
     "Sub Copy": c.sub_copy_text ?? "",
+    "PN Type": c.pn_type ?? "",
     "H Count": c.h_count ?? 0,
     "S Count": c.s_count ?? 0,
     "Reference Link": c.reference_link ?? "",
@@ -89,6 +91,8 @@ export function buildContentWorkbook(campaigns: Campaign[]): ArrayBuffer {
 /* ───────────────────────── import ───────────────────────── */
 
 export interface ParsedContentRow {
+  /** SALE or BAU. Empty is allowed; anything else is rejected per row. */
+  pn_type: string | null;
   campaignId: string;
   header: string;
   sub_copy_text: string;
@@ -168,11 +172,25 @@ export function parseContentWorkbook(
       return;
     }
     seen.set(id, excelRow);
+
+    /**
+     * PN Type: empty is allowed (older PNs have none), but anything other
+     * than SALE or BAU is rejected for THAT ROW and listed — never silently
+     * dropped and never written through.
+     */
+    const rawType = String(r["PN Type"] ?? "").trim();
+    if (rawType !== "" && !isValidPnType(rawType)) {
+      errors.push(
+        `Row ${excelRow}: PN Type "${rawType}" is not valid — use SALE or BAU.`);
+      return;
+    }
+
     rows.push({
       campaignId: id,
       header: String(r["Header"] ?? "").trim(),
       sub_copy_text: String(r["Sub Copy"] ?? "").trim(),
       reference_link: String(r["Reference Link"] ?? "").trim(),
+      pn_type: rawType || null,
       excelRow,
     });
   });
@@ -252,13 +270,15 @@ export function validateContentRow(
 
 /* ───────────────────────── diff ───────────────────────── */
 
-export const CONTENT_DIFF_FIELDS = ["header", "sub_copy_text", "reference_link"] as const;
+export const CONTENT_DIFF_FIELDS =
+  ["header", "sub_copy_text", "reference_link", "pn_type"] as const;
 export type ContentDiffField = (typeof CONTENT_DIFF_FIELDS)[number];
 
 export const DIFF_LABEL: Record<ContentDiffField, string> = {
   header: "Header Updated",
   sub_copy_text: "Sub Copy Updated",
   reference_link: "Reference Link Updated",
+  pn_type: "PN Type Updated",
 };
 
 /**

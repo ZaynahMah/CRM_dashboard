@@ -15,7 +15,10 @@ import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 import { optionsFor, isOffList } from "@/lib/pnDropdowns";
 import { PN_TEMPLATES, isLegacyTemplate, PN_TYPES } from "@/config/pnOptions";
 import { SendBackModal } from "./SendBackModal";
-import { canSendBack, sendBackToContent } from "@/services/sendBack";
+import {
+  canSendBack, sendBackToContent, removeFromCalendar,
+  rememberedName, rememberName,
+} from "@/services/sendBack";
 import {
   categoryErrors, draftFromCampaign, draftIsLockable, draftIsSavable, draftToPatch,
   isDateTimeLocal, legacyDateTimeNote, type CategoryDraft,
@@ -85,6 +88,11 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [sendBackBusy, setSendBackBusy] = useState(false);
   const [sendBackError, setSendBackError] = useState<string | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [removeName, setRemoveName] = useState(() => rememberedName());
+  const [removeReason, setRemoveReason] = useState("");
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [changeReason, setChangeReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -172,6 +180,53 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
 
   return (
     <>
+      <Modal open={removeOpen} onClose={() => setRemoveOpen(false)}
+        title="Remove from calendar" z="z-[90]">
+        <div className="space-y-4">
+          <p className="rounded-lg bg-warning-50 px-3 py-2 text-tiny text-warning-700">
+            This takes the PN off the calendar and resets QC to pending. The QC
+            ticks are kept. It can only return to the calendar through Final QC.
+          </p>
+          <label className="block">
+            <span className="mb-1 block text-tiny font-medium text-body">
+              Your name <span className="text-danger-500">*</span>
+            </span>
+            <input value={removeName} onChange={(e) => setRemoveName(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-tiny font-medium text-body">
+              Reason <span className="text-faint">(optional)</span>
+            </span>
+            <input value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} />
+          </label>
+          {removeError && (
+            <p className="rounded-lg bg-danger-50 px-3 py-2 text-tiny text-danger-700">
+              {removeError}
+            </p>
+          )}
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" disabled={removeBusy}
+              onClick={() => setRemoveOpen(false)}>Cancel</Button>
+            <Button variant="danger"
+              disabled={removeBusy || removeName.trim() === ""}
+              onClick={async () => {
+                setRemoveBusy(true); setRemoveError(null);
+                try {
+                  await removeFromCalendar(campaign.id, removeName, removeReason);
+                  rememberName(removeName);
+                  setRemoveOpen(false);
+                  await refresh();
+                } catch (e) {
+                  setRemoveError(e instanceof Error ? e.message : String(e));
+                }
+                setRemoveBusy(false);
+              }}>
+              {removeBusy ? "Removing..." : "Remove from calendar"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <SendBackModal
         campaigns={[campaign]}
         open={sendBackOpen}
@@ -242,6 +297,15 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
             </span>
             {!sendBackGate.ok && (
               <span className="text-micro text-faint">{sendBackGate.reason}</span>
+            )}
+            {/* The ONLY way to edit a PN that is already on the calendar.
+                Deliberate: confirmation plus a typed name, QC resets, and it
+                can return only through Final QC. */}
+            {campaign.calendar_status === "UPDATED" && (
+              <Button size="sm" variant="ghost"
+                onClick={() => { setRemoveError(null); setRemoveOpen(true); }}>
+                Remove from calendar
+              </Button>
             )}
             {(campaign.send_back_count ?? 0) > 0 && (
               <Pill dot={false} tone="warning"
@@ -690,7 +754,14 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
 function CategoryForm({ campaign, profileId, onSaved }: {
   campaign: Campaign; profileId: string; onSaved: () => Promise<void>;
 }) {
-  const locked = campaign.category_status === "LOCKED";
+  /**
+   * Category's own input is locked once submitted — EXCEPT that Category may
+   * now re-open it with Edit, right up until the PN reaches the calendar.
+   * After that the Postgres trigger rejects the write anyway, so the UI and
+   * the database agree.
+   */
+  const onCalendar = campaign.calendar_status === "UPDATED";
+  const locked = campaign.category_status === "LOCKED" && onCalendar;
   const [editing, setEditing] = useState(false);
   // Seeded from this campaign only. The parent passes key={campaign.id}, so
   // a different campaign gets a different instance and this initialiser runs
@@ -873,7 +944,13 @@ function ContentForm({ campaign, profileId, onSaved }: {
   const [error, setError] = useState<string | null>(null);
   // Optimistic: flipped the moment the write confirms, so the block reflects
   // the new state without waiting for the parent's refetch to come back.
-  const [submitted, setSubmitted] = useState(campaign.content_status === "SUBMITTED");
+  /**
+   * Content's input is read-only after submitting — EXCEPT while the PN is
+   * not yet on the calendar, when Content may edit its own fields again.
+   */
+  const onCalendar = campaign.calendar_status === "UPDATED";
+  const [submitted, setSubmitted] =
+    useState(campaign.content_status === "SUBMITTED" && onCalendar);
 
   // Counts are derived, never typed. Two fields that can disagree with the
   // text they describe are two fields that will eventually disagree.
