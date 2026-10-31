@@ -17,6 +17,21 @@ export const PART2_FIELDS = [
   { key: "creative_requirements", label: "Creative Requirements" },
 ] as const;
 
+/**
+ * ITEM 2 — the SEND gate: all four above PLUS PN Type.
+ *
+ * Kept SEPARATE from PART2_FIELDS on purpose. `part2Complete` (bucket
+ * membership, Pending vs Completed CRM Input) reads PART2_FIELDS, and all
+ * 928 existing PNs have pn_type = NULL — folding PN Type into that list
+ * would move every one of them backwards into Pending CRM Input, which you
+ * ruled out. The send gate is only consulted when CRM actually sends, so
+ * existing rows are untouched until someone tries to move one forward.
+ */
+export const SEND_FIELDS = [
+  ...PART2_FIELDS,
+  { key: "pn_type", label: "PN Type" },
+] as const;
+
 export type Part2Key = (typeof PART2_FIELDS)[number]["key"];
 
 /**
@@ -51,7 +66,7 @@ export const requiredMessage = (label: string) => `${label} is required`;
 
 /** The tooltip on a disabled Send button. */
 export function missingTooltip(c: Partial<Campaign>): string | undefined {
-  const missing = missingPart2(c);
+  const missing = missingToSend(c);
   if (missing.length === 0) return undefined;
   return `Still needed: ${missing.join(", ")}`;
 }
@@ -61,6 +76,15 @@ export function missingTooltip(c: Partial<Campaign>): string | undefined {
  * to Content, through QC or on the calendar keep working untouched — this
  * rule applies only to a PN about to be moved forward now.
  */
+/**
+ * ITEM 2 — PN Type is required only for a NEW send.
+ *
+ * Every one of the 928 existing PNs has pn_type = NULL. `alreadyMovedOn`
+ * already grandfathers anything sent, submitted, QC-passed or on the
+ * calendar, so none of them is re-validated or moved back: `part2Complete`
+ * (which decides Pending vs Completed CRM Input) is only consulted for PNs
+ * that have NOT yet gone to Content.
+ */
 export const alreadyMovedOn = (c: Partial<Campaign>) =>
   c.crm_status === "SENT_TO_CONTENT"
   || c.content_status === "SUBMITTED"
@@ -68,5 +92,18 @@ export const alreadyMovedOn = (c: Partial<Campaign>) =>
   || c.calendar_status === "UPDATED";
 
 /** The gate used before a status change. Grandfathers anything already moved. */
+/** Which SEND fields are missing — the four plus PN Type. */
+export function missingToSend(c: Partial<Campaign>): string[] {
+  return SEND_FIELDS
+    .filter((f) => !isPart2FieldFilled(c[f.key as keyof Campaign]))
+    .map((f) => f.label);
+}
+
+export const sendReady = (c: Partial<Campaign>) => missingToSend(c).length === 0;
+
+/**
+ * The gate before a status change. A PN that has already moved on is never
+ * re-validated, so the 928 existing null-PN-Type rows keep flowing.
+ */
 export const canMoveForward = (c: Partial<Campaign>) =>
-  alreadyMovedOn(c) || part2Ready(c);
+  alreadyMovedOn(c) || sendReady(c);

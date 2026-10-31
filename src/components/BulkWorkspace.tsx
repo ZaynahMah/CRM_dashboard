@@ -276,7 +276,8 @@ const CONTENT_INPUT_COLUMNS: ColumnDef[] = [
   { key: "header", label: "Header", width: 260, longText: true },
   { key: "sub_copy_text", label: "Sub Copy", width: 280, longText: true },
   // Content's fifth input. Editable here; read-only in every other grid.
-  { key: "pn_type", label: "PN Type", width: 110, type: "select", options: PN_TYPES },
+  // CRM-owned: Content sees it, cannot change it.
+  { key: "pn_type", label: "PN Type", width: 110, type: "readonly" },
   { key: "reference_link", label: "Reference Link", width: 170 },
 ];
 
@@ -317,6 +318,8 @@ const CATEGORY_COLUMNS: ColumnDef[] = [
   { key: "pn_template", label: "PN Template", width: 170, type: "select",
     options: PN_TEMPLATES },
   { key: "creative_requirements", label: "Creative Reqs", width: 200, longText: true },
+  // ITEM 2: PN Type — CRM's fifth Part 2 field, given TO Content.
+  { key: "pn_type", label: "PN Type", width: 110, type: "select", options: PN_TYPES },
 ];
 
 /** Final QC — every field CRM used to open each record to check. */
@@ -512,7 +515,21 @@ export function BulkWorkspace({
      * fast flick costs one render per frame instead of two.
      */
     let frame = 0;
+    /**
+     * ITEM 4 — the remaining scroll lag.
+     *
+     * `scrollTop` is only read to compute the virtual window. When
+     * `renderAll` is true (wrapped modes at or under the row limit) the
+     * window is the whole list, so the value is NEVER USED — yet every
+     * scroll frame still set state and re-rendered every row.
+     *
+     * Measured on the CATEGORY_REVIEW grid (16 columns, 4 of them
+     * auto-growing textareas): 400 rows = 6,400 cells and 1,600 textareas
+     * re-rendered per frame, ~384,000 cell renders a second while scrolling.
+     * Skipping the update when it cannot change anything takes that to zero.
+     */
     const onScroll = () => {
+      if (renderAllRef.current) return;
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
@@ -530,11 +547,26 @@ export function BulkWorkspace({
     };
   }, []);
 
+  /**
+   * ITEM 3 — columns HIDDEN per mode. Display only: the fields stay in the
+   * database, the drawer, every other grid and all exports, and a save
+   * never touches them because a hidden column is never rendered and so
+   * never becomes dirty.
+   *
+   * One line brings a column back.
+   */
+  const HIDDEN_BY_MODE: Partial<Record<WorkspaceMode, readonly string[]>> = {
+    // The CATEGORY-owned Campaign Name text and Landing Link. The tracking
+    // "Campaign Name" (campaign_name_code) and "Landing (code)" stay.
+    FINAL_QC: ["campaign_name", "landing"],
+  };
+
   const columns =
-    mode === "FINAL_QC" ? QC_COLUMNS
+    (mode === "FINAL_QC" ? QC_COLUMNS
     : mode === "CATEGORY_INPUT" ? CATEGORY_INPUT_COLUMNS
     : mode === "CONTENT_INPUT" ? CONTENT_INPUT_COLUMNS
-    : CATEGORY_COLUMNS;
+    : CATEGORY_COLUMNS)
+    .filter((c) => !(HIDDEN_BY_MODE[mode] ?? []).includes(String(c.key)));
   const isQc = mode === "FINAL_QC";
   const dirtyCount = Object.keys(dirty).length + Object.keys(dirtyQc).length;
 
@@ -907,6 +939,12 @@ export function BulkWorkspace({
   const wrapRows = mode === "CONTENT_INPUT" || mode === "CATEGORY_REVIEW";
   const NATURAL_HEIGHT_LIMIT = 400;
   const renderAll = wrapRows && visibleCampaigns.length <= NATURAL_HEIGHT_LIMIT;
+  /**
+   * Read inside the scroll listener, which is registered once. A ref keeps
+   * it current without re-registering the listener on every render.
+   */
+  const renderAllRef = useRef(renderAll);
+  renderAllRef.current = renderAll;
 
   const OVERSCAN = 12;
   const rowH = wrapRows ? 96 : ROW_HEIGHT;      // wrapped rows are taller

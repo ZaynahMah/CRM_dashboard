@@ -95,15 +95,20 @@ describe("D — PN Type", () => {
     }
   });
 
-  it("is editable in Content's grid, read-only in CRM's", () => {
+  /**
+   * SUPERSEDED by Phase 1 item 2: PN Type is CRM's input TO Content, not
+   * Content's own field. It is now editable in CRM's review grid and
+   * read-only for Content.
+   */
+  it("is editable in CRM's review grid, read-only in Content's", () => {
+    const cat = bulk.slice(bulk.indexOf("const CATEGORY_COLUMNS"),
+                           bulk.indexOf("];", bulk.indexOf("const CATEGORY_COLUMNS")));
+    expect(cat).toContain('key: "pn_type"');
+    expect(cat).toContain("options: PN_TYPES");
+
     const content = bulk.slice(bulk.indexOf("CONTENT_INPUT_COLUMNS"),
                                bulk.indexOf("];", bulk.indexOf("CONTENT_INPUT_COLUMNS")));
-    expect(content).toContain('key: "pn_type"');
-    expect(content).toContain("options: PN_TYPES");
-
-    const qc = bulk.slice(bulk.indexOf("const QC_COLUMNS"),
-                          bulk.indexOf("];", bulk.indexOf("const QC_COLUMNS")));
-    const line = qc.split("\n").find((l) => l.includes('key: "pn_type"'))!;
+    const line = content.split("\n").find((l) => l.includes('key: "pn_type"'))!;
     expect(line).toContain('type: "readonly"');
   });
 

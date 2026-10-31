@@ -1,6 +1,6 @@
 "use client";
 
-import { canMoveForward, missingPart2 } from "@/lib/crmPart2";
+import { canMoveForward, missingToSend } from "@/lib/crmPart2";
 import { isValidPnType } from "@/config/pnOptions";
 import { fetchCampaignsByIds } from "./contentBulk";
 
@@ -200,7 +200,7 @@ export async function sendToContent(campaign: Campaign, userId: string) {
    */
   if (!canMoveForward(campaign)) {
     throw new Error(
-      `Cannot send to Content — still needed: ${missingPart2(campaign).join(", ")}.`);
+      `Cannot send to Content — still needed: ${missingToSend(campaign).join(", ")}.`);
   }
   await updateCampaign(campaign.id, { crm_status: "SENT_TO_CONTENT", content_status: "PENDING" });
   await log(campaign.id, userId, "SENT_TO_CONTENT", "CRM handed the campaign to Content.");
@@ -539,7 +539,7 @@ export async function sendBatchToContent(
         // Named by PN, date and slot, so CRM can find the blocked row.
         campaignName: `${c.campaign_name} · ${c.launch_date ?? "no date"} · slot ${
           c.slot_label ?? c.slot_number ?? "—"}`,
-        reason: `Incomplete CRM Part 2 — still needed: ${missingPart2(c).join(", ")}`,
+        reason: `Incomplete CRM Part 2 — still needed: ${missingToSend(c).join(", ")}`,
       });
       continue;
     }

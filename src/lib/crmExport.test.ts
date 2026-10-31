@@ -154,6 +154,8 @@ describe("Change 3 — the CRM review columns", () => {
       "Date", "Time", "Category", "Segment", "Slot", "Sub Category", "Brand",
       "Offer", "Landing", "Exp. CVR", "Exp. RPV", "Category Brief",
       "Title Brief", "Message Brief", "PN Template", "Creative Reqs",
+      // PN Type joined as CRM's fifth Part 2 field (Phase 1 item 2).
+      "PN Type",
     ]);
   });
 

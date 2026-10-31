@@ -60,9 +60,11 @@ describe("the four mandatory fields", () => {
   });
 
   it("the tooltip names what is missing, and is absent when complete", () => {
-    expect(missingTooltip(full({ title_brief: null })))
+    // The tooltip reflects the SEND gate, which also requires PN Type.
+    expect(missingTooltip(full({ title_brief: null, pn_type: "SALE" })))
       .toBe("Still needed: Title Brief");
-    expect(missingTooltip(full())).toBeUndefined();
+    expect(missingTooltip(full({ pn_type: "SALE" }))).toBeUndefined();
+    expect(missingTooltip(full())).toBe("Still needed: PN Type");
   });
 });
 
