@@ -64,18 +64,16 @@ describe("no truncation in the Content list view", () => {
   });
 
   it("every copy column is marked longText", () => {
-    for (const col of ["header", "sub_copy_text", "message_brief", "brief",
-                       "additional_notes", "title_brief"]) {
-      const line = SRC.split("\n").find((l) =>
-        l.includes(`key: "${col}"`) && l.includes("Content") === false
-        && l.includes("label:"));
-      expect(line, `${col} column missing`).toBeTruthy();
-    }
-    // All six appear with longText in the Content column set.
+    /*
+     * Addition C set the Content grid to the agreed 22-column order.
+     * `additional_notes` (Remarks) is NOT in that order, so it is no longer
+     * shown to Content — it is still stored, still in the drawer and still
+     * in every export. The remaining copy columns must not truncate.
+     */
     const block = SRC.slice(SRC.indexOf("const CONTENT_INPUT_COLUMNS"),
                             SRC.indexOf("];", SRC.indexOf("const CONTENT_INPUT_COLUMNS")));
     for (const col of ["header", "sub_copy_text", "message_brief", "brief",
-                       "additional_notes", "title_brief"]) {
+                       "title_brief", "creative_requirements"]) {
       const line = block.split("\n").find((l) => l.includes(`key: "${col}"`));
       expect(line, `${col} not marked longText`).toContain("longText: true");
     }
@@ -133,7 +131,10 @@ describe("the table does not explode in width", () => {
     // Taller rows and wrapped text, not an endlessly wide table.
     // 1,870 after PN Type joined Content’s grid. Still far from a table
     // that scrolls sideways forever.
-    expect(widths.reduce((a, b) => a + b, 0)).toBeLessThan(2100);
+    // Addition C: Content now carries the full 22-column input chain
+    // (CRM Step 1 + Category + CRM Part 2 + its own fields), so the grid is
+    // legitimately wider. It scrolls horizontally like the CRM grids.
+    expect(widths.reduce((a, b) => a + b, 0)).toBeLessThan(3400);
   });
 
   it("no single copy column is absurdly wide", () => {

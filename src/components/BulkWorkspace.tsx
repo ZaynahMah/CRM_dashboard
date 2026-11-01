@@ -28,6 +28,10 @@ import {
   BULK_FILL_KEYS, isValidNewBrandCode, mergeOptions, isDuplicateOption,
 } from "@/lib/pnDropdowns";
 import { PN_TEMPLATES, PN_TYPES } from "@/config/pnOptions";
+import {
+  CATEGORY_REQUIRED, validateCategorySelection, isCategoryFieldFilled,
+  type IncompleteCategoryPn,
+} from "@/lib/categoryValidation";
 import { campaignDateIso } from "@/lib/campaignDate";
 import { rowLabel } from "@/services/campaigns";
 import { listCustomOptions, addCustomOption } from "@/services/customOptions";
@@ -141,7 +145,7 @@ const TrackingCell = memo(function TrackingCell({
 
   if (col.searchable) {
     return (
-      <div className="px-1 py-0.5">
+      <div className="relative px-1 py-0.5">
         <SearchSelect portal value={value} onChange={onPick}
           options={mergedOptions as string[]}
           allowCreate={col.allowCreate}
@@ -155,7 +159,7 @@ const TrackingCell = memo(function TrackingCell({
   }
 
   return (
-    <>
+    <span className="relative block">
       <select value={value} onChange={(e) => onPick(e.target.value)}
         className="!m-0 !w-full !rounded-none !border-0 !bg-transparent !px-1.5 !py-1.5 !text-[12px]">
         {!col.fixed && <option value="">—</option>}
@@ -168,21 +172,35 @@ const TrackingCell = memo(function TrackingCell({
       </select>
       {offList && <OffListHint />}
       {unknownCategory && (
-        <span className="block px-2 pb-1 text-[10px] text-warning-700">
-          no sub-categories for “{categoryCode}”
+        <span title={`No sub-categories are defined for “${categoryCode}”.`}
+          className="pointer-events-none absolute right-0.5 top-0.5 text-[10px] leading-none text-warning-700">
+          •
         </span>
       )}
-    </>
+    </span>
   );
 });
 
 /** Marks a saved value that is not in the current option list. */
+/**
+ * A marker, not a second line: an extra line changed the row height and fed
+ * the vibration loop. The text is kept in `title` so the meaning survives.
+ */
 const OffListHint = () => (
-  <span className="block px-2 pb-1 text-[10px] text-warning-700">not in list</span>
+  <span title="This saved value is not in the current option list."
+    className="pointer-events-none absolute right-0.5 top-0.5 text-[10px] leading-none text-warning-700">
+    •
+  </span>
 );
 
 /** Fixed row height, in px, that the virtualizer's arithmetic depends on. */
 const ROW_HEIGHT = 33;
+
+/**
+ * Applied to every cell in a fixed-height mode, so nothing inside a row can
+ * make it taller than the virtualizer believes it is.
+ */
+const FIXED_CELL = "h-[33px] max-h-[33px] overflow-hidden align-middle";
 
 async function inBatches<T>(
   items: T[], fn: (item: T) => Promise<unknown>,
@@ -265,21 +283,42 @@ const CATEGORY_INPUT_COLUMNS: ColumnDef[] = [
  * Widths are kept moderate on purpose. The brief asked for taller rows and
  * wrapped text rather than a table so wide it scrolls sideways forever.
  */
+/**
+ * ADDITION C — the full input chain Content needs, in the agreed order.
+ *
+ * 1-17 are read-only: they come from CRM Step 1, Category and CRM Part 2.
+ * Ownership is unchanged — Content still writes only Header and Sub Copy,
+ * and `enforce_column_ownership()` enforces that in Postgres regardless of
+ * what this grid shows. H Count and S Count stay derived from the text.
+ */
 const CONTENT_INPUT_COLUMNS: ColumnDef[] = [
-  { key: "campaign_name", label: "Campaign Name", width: 170, type: "readonly" },
-  { key: "brand", label: "Brand", width: 110, type: "readonly" },
-  { key: "offer", label: "Offer", width: 120, type: "readonly" },
-  { key: "title_brief", label: "Title Brief", width: 200, type: "readonly", longText: true },
-  { key: "message_brief", label: "Message Brief", width: 230, type: "readonly", longText: true },
-  { key: "brief", label: "Category Brief", width: 230, type: "readonly", longText: true },
-  { key: "additional_notes", label: "Remarks", width: 190, type: "readonly", longText: true },
-  { key: "header", label: "Header", width: 260, longText: true },
-  { key: "sub_copy_text", label: "Sub Copy", width: 280, longText: true },
-  // Content's fifth input. Editable here; read-only in every other grid.
-  // CRM-owned: Content sees it, cannot change it.
-  { key: "pn_type", label: "PN Type", width: 110, type: "readonly" },
-  { key: "reference_link", label: "Reference Link", width: 170 },
+  // ── A. From CRM Step 1 and Category (read-only) ──
+  { group: "CRM",      key: "launch_date",        label: "Date",          width: 100, type: "readonly" },
+  { group: "CRM",      key: "launch_time",        label: "Time",          width: 90,  type: "readonly" },
+  { group: "CRM",      key: "category",           label: "Category",      width: 130, type: "readonly" },
+  { group: "CRM",      key: "pncc_segment_label", label: "Segment",       width: 150, type: "readonly" },
+  { group: "CRM",      key: "slot_label",         label: "Slot",          width: 70,  type: "readonly" },
+  { group: "Category", key: "sub_category",       label: "Sub Category",  width: 140, type: "readonly" },
+  { group: "Category", key: "brand",              label: "Brand",         width: 150, type: "readonly" },
+  { group: "Category", key: "offer",              label: "Offer",         width: 160, type: "readonly" },
+  { group: "Category", key: "landing",            label: "Landing",       width: 220, type: "readonly" },
+  { group: "Category", key: "expected_cvr",       label: "Exp. CVR",      width: 100, type: "readonly" },
+  { group: "Category", key: "expected_rpv",       label: "Exp. RPV",      width: 100, type: "readonly" },
+  { group: "Category", key: "brief",              label: "Category Brief",width: 230, type: "readonly", longText: true },
+  // ── CRM Part 2, shown exactly as CRM entered it ──
+  { group: "CRM",      key: "title_brief",        label: "Title Brief",   width: 220, type: "readonly", longText: true },
+  { group: "CRM",      key: "message_brief",      label: "Message Brief", width: 220, type: "readonly", longText: true },
+  { group: "CRM",      key: "pn_template",        label: "PN Template",   width: 150, type: "readonly" },
+  { group: "CRM",      key: "creative_requirements", label: "Creative Reqs", width: 200, type: "readonly", longText: true },
+  { group: "CRM",      key: "pn_type",            label: "PN Type",       width: 100, type: "readonly" },
+  // ── B. Content's own inputs, editing unchanged ──
+  { group: "Content",  key: "header",             label: "Header",        width: 220, longText: true },
+  { group: "Content",  key: "sub_copy_text",      label: "Sub Copy",      width: 280, longText: true },
+  { group: "Content",  key: "h_count",            label: "H Count",       width: 80,  type: "readonly" },
+  { group: "Content",  key: "s_count",            label: "S Count",       width: 80,  type: "readonly" },
+  { group: "Content",  key: "reference_link",     label: "Reference Link",width: 170 },
 ];
+
 
 /** CRM Part 2 — what has to be filled before work goes to Content. */
 /**
@@ -884,9 +923,34 @@ export function BulkWorkspace({
     setSendBackBusy(false);
   };
 
+  /**
+   * ADDITION A — every selected PN must be complete before ANY is sent.
+   *
+   * All-or-nothing: a partial send would leave Category thinking the whole
+   * batch went through. The same `missingCategoryFields` the drawer uses,
+   * and the same rule migration 37 enforces in Postgres.
+   */
+  const [incomplete, setIncomplete] = useState<IncompleteCategoryPn[]>([]);
+  const incompleteIds = useMemo(
+    () => new Set(incomplete.map((r) => r.id)), [incomplete]);
+
   const runPrimary = async () => {
     if (selected.size === 0) return;
-    setBusy("primary"); setError(null); setDone(null);
+    setBusy("primary"); setError(null); setDone(null); setIncomplete([]);
+
+    if (mode === "CATEGORY_INPUT") {
+      const rows = campaigns.filter((c) => selected.has(c.id))
+        .map((c) => ({ ...c, ...(dirty[c.id] ?? {}) }));
+      const check = validateCategorySelection(rows);
+      if (!check.ok) {
+        setIncomplete(check.incomplete);
+        setError(
+          `${check.incomplete.length} of ${rows.length} selected PN`
+          + `${rows.length === 1 ? " is" : "s are"} incomplete. Nothing was sent.`);
+        setBusy(null);
+        return;
+      }
+    }
     try {
       // Unsaved edits are flushed first, so the action never operates on a
       // version of the row the user cannot see.
@@ -1175,6 +1239,34 @@ export function BulkWorkspace({
             )}
             {done && <span className="flex items-center gap-1.5 text-micro text-success-700">{Icon.check(12)} {done}</span>}
             {error && <span className="flex items-center gap-1.5 text-micro text-danger-700">{Icon.alert(12)} {error}</span>}
+
+            {/* ADDITION A: exactly which PNs blocked the send, and a way to
+                jump straight to them. */}
+            {incomplete.length > 0 && (
+              <div className="w-full rounded-lg bg-danger-50 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-micro font-600 text-danger-700">
+                    Fill these before sending:
+                  </span>
+                  <Button size="sm" variant="ghost"
+                    onClick={() => setSelected(new Set(incomplete.map((r) => r.id)))}>
+                    Select only the incomplete ({incomplete.length})
+                  </Button>
+                </div>
+                <ul className="mt-1 space-y-0.5">
+                  {incomplete.slice(0, 10).map((r) => (
+                    <li key={r.id} className="text-micro text-danger-700">
+                      {r.label} — missing {r.missing.join(", ")}
+                    </li>
+                  ))}
+                  {incomplete.length > 10 && (
+                    <li className="text-micro text-faint">
+                      …and {incomplete.length - 10} more.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1233,6 +1325,10 @@ export function BulkWorkspace({
                   <th key={String(col.key)} style={{ minWidth: col.width }}
                     className="sticky top-0 z-20 border-b border-r border-line bg-[#F9FAFB] px-2 py-2 text-left text-micro font-600 uppercase tracking-wide text-faint">
                     {col.label}
+                    {/* ADDITION A: the seven Category must-fills. */}
+                    {mode === "CATEGORY_INPUT"
+                      && (CATEGORY_REQUIRED as readonly string[]).includes(String(col.key))
+                      && <span className="ml-0.5 text-danger-500">*</span>}
                   </th>
                 ))}
                 {isQc && QC_CHECKS.map((q) => (
@@ -1249,7 +1345,25 @@ export function BulkWorkspace({
               {visibleRows.map((c, vi) => {
                 const i = first + vi;
                 return (
-                <tr key={c.id} className={i % 2 ? "bg-[#FCFCFD]" : "bg-surface"}>
+                <tr key={c.id}
+                  /**
+                   * ADDITION B — the vibration.
+                   *
+                   * padTop/padBottom are computed as `index * rowH`, but a
+                   * row was free to be taller: the searchable cells render a
+                   * bordered trigger inside a px-1 py-0.5 wrapper (~38px vs
+                   * the assumed 33px), and the "not in list" hint added a
+                   * second line (~52px). Over 928 rows that is thousands of
+                   * pixels of disagreement between the spacers and the real
+                   * content. Scrolling changed padTop, the document height
+                   * shifted, the browser corrected scrollTop, onScroll fired
+                   * and set state again — a feedback loop, seen as jitter.
+                   *
+                   * Pinning the height makes the arithmetic true, so the
+                   * loop cannot start. Wrapped modes keep their taller row.
+                   */
+                  style={wrapRows ? undefined : { height: rowH }}
+                  className={i % 2 ? "bg-[#FCFCFD]" : "bg-surface"}>
                   <td className={`sticky left-0 z-10 border-b border-r border-line px-2 py-1 ${i % 2 ? "bg-[#FCFCFD]" : "bg-surface"}`}>
                     <input type="checkbox"
                       /* In Final QC the box shows the row's QC progress:
@@ -1312,7 +1426,15 @@ export function BulkWorkspace({
 
                   {columns.map((col) => (
                     <td key={String(col.key)}
-                      className={`border-b border-r border-line p-0 ${wrapRows ? "align-top" : ""}`}>
+                      /* FIXED_CELL caps the height in virtualised modes so a
+                         cell cannot make the row taller than rowH. */
+                      className={`border-b border-r border-line p-0 ${
+                        wrapRows ? "align-top" : FIXED_CELL}${
+                        // ADDITION A: the exact cells that block the send.
+                        incompleteIds.has(c.id)
+                          && (CATEGORY_REQUIRED as readonly string[]).includes(String(col.key))
+                          && !isCategoryFieldFilled(valueOf(c, col.key))
+                          ? " bg-danger-50 ring-1 ring-inset ring-[#FDA29B]" : ""}`}>
                       {col.type === "bool" ? (
                         <div className="flex justify-center py-1.5">
                           <input type="checkbox" checked={boolOf(c, col.key)}

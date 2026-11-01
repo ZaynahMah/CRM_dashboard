@@ -161,3 +161,62 @@ export function legacyDateTimeNote(v: string): string | null {
   const t = (v ?? "").trim();
   return t && !isDateTimeLocal(t) ? t : null;
 }
+
+
+/* ─────────────── Addition A: ONE validator for every submit path ─────────────── */
+
+/**
+ * Which of the seven mandatory fields a PN is still missing, as display
+ * labels.
+ *
+ * This mirrors `category_missing_fields()` in migration 37 exactly, so the
+ * UI can never allow a submit the database will reject, and vice versa.
+ * Empty, whitespace-only and a lone "-" all count as missing.
+ */
+export function missingCategoryFields(c: Partial<Campaign>): string[] {
+  return CATEGORY_REQUIRED
+    .filter((f) => !isCategoryFieldFilled(c[f as keyof Campaign]))
+    .map((f) => CATEGORY_FIELD_LABEL[f] ?? f);
+}
+
+/** Same trim rule as the database gate. */
+export function isCategoryFieldFilled(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  const s = String(v).trim();
+  return s !== "" && s !== "-" && s !== "—" && s.toLowerCase() !== "select";
+}
+
+/** Can this PN be sent to CRM? */
+export const categoryReadyToSubmit = (c: Partial<Campaign>) =>
+  missingCategoryFields(c).length === 0;
+
+/** One incomplete PN, named so Category can find it. */
+export interface IncompleteCategoryPn {
+  id: string;
+  label: string;
+  missing: string[];
+}
+
+/**
+ * Validates a whole selection. ALL-OR-NOTHING by design: if any selected PN
+ * is incomplete, nothing is sent, so a partial send cannot leave Category
+ * believing the batch went through.
+ */
+export function validateCategorySelection(
+  rows: Partial<Campaign>[]
+): { ok: boolean; incomplete: IncompleteCategoryPn[] } {
+  const incomplete: IncompleteCategoryPn[] = [];
+  for (const c of rows) {
+    const missing = missingCategoryFields(c);
+    if (missing.length > 0) {
+      incomplete.push({
+        id: String(c.id ?? ""),
+        label: `${c.campaign_name ?? "PN"} · ${c.launch_date ?? "no date"} · ${
+          c.pncc_segment_label ?? "no segment"} · slot ${
+          c.slot_label ?? c.slot_number ?? "—"}`,
+        missing,
+      });
+    }
+  }
+  return { ok: incomplete.length === 0, incomplete };
+}
