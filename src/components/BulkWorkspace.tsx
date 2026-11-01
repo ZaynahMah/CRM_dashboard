@@ -317,6 +317,8 @@ const CONTENT_INPUT_COLUMNS: ColumnDef[] = [
   { group: "Content",  key: "h_count",            label: "H Count",       width: 80,  type: "readonly" },
   { group: "Content",  key: "s_count",            label: "S Count",       width: 80,  type: "readonly" },
   { group: "Content",  key: "reference_link",     label: "Reference Link",width: 170 },
+  // Decision 1: Comments restored as the LAST column, behaving as before.
+  { group: "Content",  key: "additional_notes",   label: "Comments",      width: 200, longText: true },
 ];
 
 

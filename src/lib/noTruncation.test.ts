@@ -123,7 +123,7 @@ describe("textarea grows with the content at every length", () => {
 });
 
 describe("the table does not explode in width", () => {
-  it("Content's total column width stays under 2000px", () => {
+  it("Content's total column width stays within budget", () => {
     const block = SRC.slice(SRC.indexOf("const CONTENT_INPUT_COLUMNS"),
                             SRC.indexOf("];", SRC.indexOf("const CONTENT_INPUT_COLUMNS")));
     const widths = [...block.matchAll(/width:\s*(\d+)/g)].map((m) => Number(m[1]));
@@ -134,7 +134,8 @@ describe("the table does not explode in width", () => {
     // Addition C: Content now carries the full 22-column input chain
     // (CRM Step 1 + Category + CRM Part 2 + its own fields), so the grid is
     // legitimately wider. It scrolls horizontally like the CRM grids.
-    expect(widths.reduce((a, b) => a + b, 0)).toBeLessThan(3400);
+    // 22 columns now, including the restored Comments column.
+    expect(widths.reduce((a, b) => a + b, 0)).toBeLessThan(3600);
   });
 
   it("no single copy column is absurdly wide", () => {
