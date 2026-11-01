@@ -1,5 +1,6 @@
 "use client";
 
+import { ChangeRequestGroups } from "@/components/ChangeRequestGroups";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import {
@@ -33,6 +34,10 @@ export default function ChangesPage() {
         title="Changes to locked submissions"
         sub="Once Category submits, the record is locked. Every edit after that point is requested, reviewed and logged."
       />
+
+      {/* Multi-field requests (migration 38), reviewed as one decision.
+          The single-field list below stays for requests raised before it. */}
+      <ChangeRequestGroups campaigns={Object.values(campaigns)} onChanged={load} />
 
       {requests.length === 0 ? (
         <Card><Empty title="No change requests" hint="Requests raised against locked campaigns will collect here." /></Card>

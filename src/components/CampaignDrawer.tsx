@@ -15,6 +15,11 @@ import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 import { optionsFor, isOffList } from "@/lib/pnDropdowns";
 import { PN_TEMPLATES, isLegacyTemplate, PN_TYPES } from "@/config/pnOptions";
 import { SendBackModal } from "./SendBackModal";
+import { EditInputModal } from "./EditInputModal";
+import {
+  editGate, listPendingRequests, groupRequests, withdrawChangeGroup,
+  rememberedRequestName, FIELD_LABEL, type ChangeRequestGroup,
+} from "@/services/changeRequests";
 import {
   canSendBack, sendBackToContent, removeFromCalendar,
   rememberedName, rememberName,
@@ -93,6 +98,30 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removeName, setRemoveName] = useState(() => rememberedName());
   const [removeReason, setRemoveReason] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [withdrawBusy, setWithdrawBusy] = useState(false);
+  const [myPending, setMyPending] = useState<ChangeRequestGroup | null>(null);
+
+  /**
+   * This team's own pending request on this PN, if any.
+   *
+   * Declared with the other hooks: a hook below an early return breaks the
+   * rules-of-hooks order and has crashed this app before.
+   */
+  const loadPending = useCallback(async () => {
+    if (!campaignId) return;
+    try {
+      const rows = await listPendingRequests();
+      const mine = groupRequests(rows).find(
+        (g) => g.campaignId === campaignId && g.team === profile.role);
+      setMyPending(mine ?? null);
+    } catch {
+      setMyPending(null);          // never block the drawer on this
+    }
+  }, [campaignId, profile.role]);
+
+  useEffect(() => { void loadPending(); }, [loadPending]);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [changeReason, setChangeReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -133,6 +162,7 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   // #2: the drawer must enforce the tracking code exactly as Bulk Push does.
   /** Which mandatory Part 2 fields are still empty, for inline errors. */
   const missingKeys = missingPart2Keys(campaign);
+
 
 
   /**
@@ -227,6 +257,12 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
         </div>
       </Modal>
 
+      {campaign && (role === "CATEGORY" || role === "CONTENT") && (
+        <EditInputModal campaign={campaign} role={role} open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onRaised={() => { void loadPending(); }} />
+      )}
+
       <SendBackModal
         campaigns={[campaign]}
         open={sendBackOpen}
@@ -280,6 +316,63 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
               {campaign.send_back_by_name ?? "CRM"}
               {campaign.send_back_at ? ` · ${fmtRelative(campaign.send_back_at)}` : ""}
             </p>
+          </div>
+        )}
+
+        {/* ITEM 5: a PN on the calendar is read-only for EVERY role,
+            including CRM. Migration 39 enforces it in Postgres; this says so
+            before a save is attempted. */}
+        {campaign.calendar_status === "UPDATED" && (
+          <div className="mb-4 rounded-lg bg-warning-50 px-4 py-2.5">
+            <p className="text-tiny font-600 text-warning-700">On calendar</p>
+            <p className="mt-0.5 text-micro text-warning-700">
+              This PN is finalised and locked for everyone. CRM can reopen it
+              with “Remove from calendar”; it then returns through Final QC.
+            </p>
+          </div>
+        )}
+
+        {/* ITEM 6: Category and Content propose changes once they have
+            submitted. The PN does not change until CRM accepts. */}
+        {(role === "CATEGORY" || role === "CONTENT") && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {myPending ? (
+              <>
+                <Pill dot={false} tone="warning" label="Change pending CRM approval" />
+                <Button size="sm" variant="ghost" disabled={withdrawBusy}
+                  onClick={async () => {
+                    const who = rememberedRequestName();
+                    if (!who) { setEditError("Enter your name in Edit input first."); return; }
+                    setWithdrawBusy(true); setEditError(null);
+                    try {
+                      await withdrawChangeGroup(myPending.groupId, who);
+                      await loadPending();
+                    } catch (e) {
+                      setEditError(e instanceof Error ? e.message : String(e));
+                    }
+                    setWithdrawBusy(false);
+                  }}>
+                  {withdrawBusy ? "Withdrawing..." : "Withdraw"}
+                </Button>
+                <span className="text-micro text-faint">
+                  {myPending.rows.map((r) => FIELD_LABEL[r.field_name] ?? r.field_name).join(", ")}
+                </span>
+              </>
+            ) : (
+              <span title={editGate(campaign, role) ?? undefined}>
+                <Button size="sm" variant="ghost"
+                  disabled={editGate(campaign, role) !== undefined}
+                  onClick={() => { setEditError(null); setEditOpen(true); }}>
+                  Edit input
+                </Button>
+              </span>
+            )}
+            {editGate(campaign, role) && !myPending && (
+              <span className="text-micro text-faint">{editGate(campaign, role)}</span>
+            )}
+            {editError && (
+              <span className="text-micro text-danger-700">{editError}</span>
+            )}
           </div>
         )}
 

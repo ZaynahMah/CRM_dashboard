@@ -75,6 +75,9 @@ export interface Campaign {
   defaulted_at: string | null;
   default_reason: string | null;
   /** CRM "Send back to Content" — latest reason plus the running count. */
+  /** Set the first time each team submits (migration 35). */
+  category_submitted_at: string | null;
+  content_submitted_at: string | null;
   send_back_count: number | null;
   send_back_reason: string | null;
   send_back_field: string | null;
