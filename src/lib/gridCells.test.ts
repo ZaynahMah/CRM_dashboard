@@ -57,7 +57,9 @@ describe("Bug 2 — Sub Cat reads the EDITED category code", () => {
     const menapOnly = subcategoriesFor("menap")
       .find((x) => !subcategoriesFor("watches").includes(x))!;
     expect(isSubcategoryValid("watches", menapOnly)).toBe(false);
-    expect(bulk).toContain('setField(c.id, "tracking_sub_category", "")');
+    // The clear now lives in the cached pick handler, which is what makes
+    // memo() on TrackingCell effective.
+    expect(bulk).toContain('setField(id, "tracking_sub_category", "")');
   });
 });
 
@@ -299,13 +301,21 @@ describe("the scroll stutter fix", () => {
     const blk = bulk.slice(i, bulk.indexOf("];", i));
     const keys = [...blk.matchAll(/key: "([a-z_0-9]+)"/g)].map((m) => m[1]);
     // 43 since PN Type (Content's fifth input) joined the Final QC grid.
+    // 43 declared; two are hidden at render time by HIDDEN_BY_MODE
+    // (campaign_name, landing) without being removed from the definition.
     expect(keys).toHaveLength(43);
     expect(keys).toContain("pn_type");
+    expect(bulk).toContain('FINAL_QC: ["campaign_name", "landing"]');
     expect(keys).toContain("segment_1");
     expect(keys).toContain("tracking_sub_category");
     // Bulk fill, Sub Cat dependency and the z-index fix are untouched.
     expect(bulk).toContain("BULK_FILL_KEYS.has(String(c.key))");
     expect(bulk).toContain("dependsOnCategoryCode: true");
-    expect(bulk).toContain('setField(c.id, "tracking_sub_category", "")');
+    // Handlers are now stable per (row, column) so memo() can bail out.
+    expect(bulk).toContain("const pickHandlerFor = useCallback");
+    expect(bulk).toContain("pickHandlers.current.set(k, fn)");
+    // The clear now lives in the cached pick handler, which is what makes
+    // memo() on TrackingCell effective.
+    expect(bulk).toContain('setField(id, "tracking_sub_category", "")');
   });
 });

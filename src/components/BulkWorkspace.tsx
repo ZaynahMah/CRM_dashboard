@@ -466,6 +466,23 @@ export function BulkWorkspace({
   const mergedBrandOptions = useMemo(
     () => mergeOptions("tracking_brand", customBrands), [customBrands]);
 
+  /**
+   * ITEM 4 — the Final QC grid.
+   *
+   * `TrackingCell` is wrapped in memo(), but `onPick` and `onCreate` were
+   * inline arrows rebuilt on every render, so the props never compared
+   * equal and memo() never bailed out. All 516 dropdown cells re-rendered
+   * on every scroll frame (~31,000 a second at 60fps).
+   *
+   * These caches hand out ONE stable function per (row, column), so a row
+   * that has not changed is skipped entirely.
+   */
+  const pickHandlers = useRef(new Map<string, (v: string) => void>());
+  const createHandlers = useRef(new Map<string, (v: string) => Promise<void>>());
+  const campaignsRef = useRef<Campaign[]>(campaigns);
+  campaignsRef.current = campaigns;
+  const addBrandCodeRef = useRef<(v: string) => Promise<void>>(async () => {});
+
   const addBrandCode = useCallback(async (raw: string) => {
     setCreateError(null);
     const v = raw.trim().toLowerCase();
@@ -485,6 +502,7 @@ export function BulkWorkspace({
       setCreateError(e instanceof Error ? e.message : String(e));
     }
   }, [customBrands, profileId]);
+  addBrandCodeRef.current = addBrandCode;
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(t);
@@ -639,6 +657,48 @@ export function BulkWorkspace({
     setDirty((prev) => ({ ...prev, [id]: { ...prev[id], [key]: value } }));
     setDone(null);
   }, []);
+
+  /**
+   * One stable handler per (row, column), created on first use and reused
+   * afterwards, so memo() on TrackingCell can bail out.
+   *
+   * The handlers read `setField` and `valueOf`, which are themselves
+   * useCallback-stable, so a cached closure never goes stale.
+   */
+  const pickHandlerFor = useCallback((id: string, key: string) => {
+    const k = `${id}:${key}`;
+    let fn = pickHandlers.current.get(k);
+    if (!fn) {
+      fn = (v: string) => {
+        setField(id, key as keyof Campaign, v);
+        // Changing the category code can invalidate the saved sub-category,
+        // so it is cleared rather than left pointing at a code that is no
+        // longer offered.
+        if (key === "tracking_category") {
+          const row = campaignsRef.current.find((x) => x.id === id);
+          if (row && !isSubcategoryValid(v, valueOf(row, "tracking_sub_category"))) {
+            setField(id, "tracking_sub_category", "");
+          }
+        }
+      };
+      pickHandlers.current.set(k, fn);
+    }
+    return fn;
+  }, [setField, valueOf]);
+
+  const createHandlerFor = useCallback((id: string, key: string) => {
+    const k = `${id}:${key}`;
+    let fn = createHandlers.current.get(k);
+    if (!fn) {
+      fn = async (v: string) => {
+        await addBrandCodeRef.current(v);
+        setField(id, key as keyof Campaign, v.trim().toLowerCase());
+      };
+      createHandlers.current.set(k, fn);
+    }
+    return fn;
+  }, [setField]);
+
 
   const setQcField = useCallback((id: string, key: keyof QcChecklist, value: boolean) => {
     setDirtyQc((prev) => ({ ...prev, [id]: { ...prev[id], [key]: value } }));
@@ -1268,29 +1328,12 @@ export function BulkWorkspace({
                         <TrackingCell col={col}
                           mergedList={col.allowCreate ? mergedBrandOptions : undefined}
                           onCreate={col.allowCreate
-                            // Adds to the shared list, then selects it on
-                            // this row so CRM does not have to find it again.
-                            ? async (v) => {
-                                await addBrandCode(v);
-                                setField(c.id, col.key, v.trim().toLowerCase());
-                              }
+                            ? createHandlerFor(c.id, String(col.key))
                             : undefined}
                           createError={col.allowCreate ? createError : null}
                           categoryCode={valueOf(c, "tracking_category")}
                           value={valueOf(c, col.key)}
-                          onPick={(v) => {
-                            setField(c.id, col.key, v);
-                            /**
-                             * Changing the category code can invalidate the
-                             * saved sub-category, so it is cleared rather
-                             * than left pointing at a code that is no longer
-                             * offered.
-                             */
-                            if (col.key === "tracking_category"
-                              && !isSubcategoryValid(v, valueOf(c, "tracking_sub_category"))) {
-                              setField(c.id, "tracking_sub_category", "");
-                            }
-                          }} />
+                          onPick={pickHandlerFor(c.id, String(col.key))} />
                       ) : col.type === "deadline" ? (
                         <DeadlineCell campaign={c} now={now} />
                       ) : col.fixed ? (

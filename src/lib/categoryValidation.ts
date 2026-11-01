@@ -37,9 +37,22 @@ export const CATEGORY_FIELD_LABEL: Record<string, string> = {
  * required in practice (they gated the "Filled" pill and the old bulk
  * submit); the other four are newly mandatory this iteration.
  */
+/**
+ * The SEVEN fields Category must fill before a PN can go to CRM.
+ *
+ * `sub_category` is new here. CVR and RPV are `text` columns with no numeric
+ * validation anywhere today, so "filled" means non-empty after trimming and
+ * nothing more — adding a numeric rule would newly reject values already
+ * stored. Landing has no URL check either; `update_calendar()` already
+ * enforces the tatacliq host at the calendar gate.
+ */
 export const CATEGORY_REQUIRED = [
+  "sub_category",
   "brand", "offer", "brief", "landing", "expected_cvr", "expected_rpv",
 ] as const;
+
+/** Never blocks sending. */
+export const CATEGORY_OPTIONAL = ["additional_notes", "date_time_brief"] as const;
 
 export type CategoryRequiredField = (typeof CATEGORY_REQUIRED)[number];
 
