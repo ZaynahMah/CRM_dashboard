@@ -107,6 +107,8 @@ export const SEARCHABLE_KEYS = new Set([
 export const BULK_FILL_KEYS = new Set([
   "campaign_type", "campaign_name_code", "channel_name", "channel_format",
   "segment_2",
+  // CRM sets PN Type across a selection in the review grid.
+  "pn_type",
 ]);
 
 /** Brand codes are lowercase alphanumerics — enforced on an added value. */

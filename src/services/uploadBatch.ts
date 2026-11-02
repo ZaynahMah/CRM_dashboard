@@ -51,6 +51,31 @@ export interface DayPreview {
   incoming: number;
   alreadyExist: number;
   isPast: boolean;
+  /** True when the tool already holds PNs for this date. */
+  dateAlreadyInTool: boolean;
+}
+
+/** One file row that matches a PN already in the tool. */
+export interface SkippedRow {
+  date: string;
+  slot: string;
+  category: string;
+  segment: string;
+}
+
+/**
+ * The whole picture the preview shows, so the confirm button can state a
+ * number nobody has to work out.
+ *
+ * `changed` and `deleted` are always 0: an add-only upload inserts and does
+ * nothing else. They are reported so the screen can SAY so.
+ */
+export interface UploadPlan {
+  days: DayPreview[];
+  toAdd: number;
+  skipped: SkippedRow[];
+  changed: 0;
+  deleted: 0;
 }
 
 /**
@@ -79,12 +104,17 @@ export function previewByDay(
   const budget = new Map<string, number>();
   for (const c of existing) budget.set(key(c), (budget.get(key(c)) ?? 0) + 1);
 
+  // Dates the tool already holds, so the preview can warn about them.
+  const existingDates = new Set(
+    existing.map((c) => (c.launch_date ?? "").slice(0, 10)).filter(Boolean));
+
   const byDay = new Map<string, DayPreview>();
   for (const r of rows) {
     const d = (r.launch_date ?? "").slice(0, 10);
     if (!d) continue;
     if (!byDay.has(d)) {
-      byDay.set(d, { date: d, incoming: 0, alreadyExist: 0, isPast: d < today });
+      byDay.set(d, { date: d, incoming: 0, alreadyExist: 0, isPast: d < today,
+                     dateAlreadyInTool: existingDates.has(d) });
     }
     const day = byDay.get(d)!;
     const k = key(r);
@@ -178,4 +208,77 @@ export async function resetLastUpload(input: {
   });
   if (error) throw new Error(error.message);
   return Number(data ?? 0);
+}
+
+
+/**
+ * The full add-only plan: what will be added, what is already in the tool,
+ * and the explicit zeroes for changed and deleted.
+ *
+ * The duplicate key is date + time + slot + segment + category — the same
+ * five fields `previewByDay` counts on, because several PNs legitimately
+ * share a slot and only the whole tuple identifies a row. There is no
+ * unique index on these columns and this does NOT add one: a constraint
+ * could fail on rows already stored.
+ */
+export function buildUploadPlan(
+  rows: Parameters<typeof previewByDay>[0],
+  existing: Campaign[],
+  today = new Date().toISOString().slice(0, 10)
+): UploadPlan {
+  const days = previewByDay(rows, existing, today);
+
+  const keyOf = (r: { launch_date?: string | null; launch_time?: string | null;
+                      slot_label?: string | null; pncc_segment_label?: string | null;
+                      category?: string | null }) =>
+    [r.launch_date ?? "", r.launch_time ?? "", r.slot_label ?? "",
+     r.pncc_segment_label ?? "", r.category ?? ""].join("|");
+
+  const budget = new Map<string, number>();
+  for (const c of existing) budget.set(keyOf(c), (budget.get(keyOf(c)) ?? 0) + 1);
+
+  const skipped: SkippedRow[] = [];
+  for (const r of rows) {
+    const k = keyOf(r);
+    const left = budget.get(k) ?? 0;
+    if (left > 0) {
+      budget.set(k, left - 1);
+      skipped.push({
+        date: (r.launch_date ?? "").slice(0, 10),
+        slot: r.slot_label ?? "—",
+        category: r.category ?? "—",
+        segment: r.pncc_segment_label ?? "—",
+      });
+    }
+  }
+
+  return {
+    days,
+    toAdd: days.reduce((n, d) => n + d.incoming, 0),
+    skipped,
+    changed: 0,
+    deleted: 0,
+  };
+}
+
+/** Only the rows that are NOT already in the tool. */
+export function rowsToInsert<T extends Record<string, unknown>>(
+  rows: T[], existing: Campaign[]
+): T[] {
+  const keyOf = (r: Record<string, unknown>) =>
+    [r.launch_date ?? "", r.launch_time ?? "", r.slot_label ?? "",
+     r.pncc_segment_label ?? "", r.category ?? ""].join("|");
+  const budget = new Map<string, number>();
+  for (const c of existing) {
+    const k = keyOf(c as unknown as Record<string, unknown>);
+    budget.set(k, (budget.get(k) ?? 0) + 1);
+  }
+  const out: T[] = [];
+  for (const r of rows) {
+    const k = keyOf(r);
+    const left = budget.get(k) ?? 0;
+    if (left > 0) { budget.set(k, left - 1); continue; }   // already present
+    out.push(r);
+  }
+  return out;
 }

@@ -108,10 +108,11 @@ describe("searchable and bulk-fill sets", () => {
     }
   });
 
-  it("bulk fill covers exactly the five agreed columns", () => {
+  it("bulk fill covers exactly the agreed columns", () => {
+    // pn_type joined so CRM can set SALE/BAU across a selection.
     expect([...BULK_FILL_KEYS].sort()).toEqual([
       "campaign_name_code", "campaign_type", "channel_format",
-      "channel_name", "segment_2"]);
+      "channel_name", "pn_type", "segment_2"]);
   });
 
   it("the dependent sub-category is NOT bulk fillable", () => {

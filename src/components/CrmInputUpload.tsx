@@ -7,6 +7,7 @@ import { log, notify } from "@/services/campaigns";
 import { BATCH_UPLOAD_ENABLED } from "@/lib/featureFlags";
 import {
   addUploadBatch, fileSha256, previousUploadOfFile, previewByDay,
+  buildUploadPlan, rowsToInsert, type UploadPlan,
   resetLastUploadPreview, resetLastUpload, sha256Of,
   type DayPreview, type UploadBatchPreview,
 } from "@/services/uploadBatch";
@@ -221,6 +222,8 @@ export function CrmInputUpload({
     useState<{ created_at: string; file_name: string | null } | null>(null);
   /** Per-day split of the chosen file: new versus already present. */
   const [dayPreview, setDayPreview] = useState<DayPreview[]>([]);
+  /** The whole add-only plan: added, skipped, and the explicit zeroes. */
+  const [uploadPlan, setUploadPlan] = useState<UploadPlan | null>(null);
   /** Required on an upload and on a reset. Remembered per browser. */
   const [uploadName, setUploadName] = useState(() => rememberedName());
 
@@ -322,7 +325,7 @@ export function CrmInputUpload({
   const handleFile = useCallback(async (file: File) => {
     setReading(true); setError(null); setResult(null); setParsed([]);
     setFileName(file.name);
-    setFileHash(null); setPriorUpload(null); setDayPreview([]);
+    setFileHash(null); setPriorUpload(null); setDayPreview([]); setUploadPlan(null);
     try {
       const buffer = await file.arrayBuffer();
       const { rows, warnings } = parseCrmInputFile(buffer, isCrmSelf);
@@ -342,9 +345,11 @@ export function CrmInputUpload({
             const sha = await fileSha256(file);
             setFileHash(sha);
             setPriorUpload(await previousUploadOfFile(sha));
-            setDayPreview(previewByDay(
+            const plan = buildUploadPlan(
               withSlots as unknown as Parameters<typeof previewByDay>[0],
-              existingCampaigns ?? []));
+              existingCampaigns ?? []);
+            setUploadPlan(plan);
+            setDayPreview(plan.days);
           } catch {
             // A failed warning must never block the upload itself.
             setFileHash(null);
@@ -375,6 +380,21 @@ export function CrmInputUpload({
    * needs to be cleared separately.
    */
   const handleReviewReplace = async () => {
+    /**
+     * ADD-ONLY. Uploads never delete, archive, reset or update an existing
+     * PN, so there is nothing destructive to confirm — the per-day preview
+     * above already shows what will be added and what is skipped.
+     *
+     * The old path called `upload_reset_preview()` here and opened the
+     * "Full reset" modal. That call was never gated on BATCH_UPLOAD_ENABLED,
+     * which is why the reset screen still appeared even though the SEND
+     * itself had been add-only since afdb692.
+     */
+    if (BATCH_UPLOAD_ENABLED) {
+      await handleConfirmReplace();
+      return;
+    }
+
     setCheckingReplace(true); setError(null);
     try {
       // Both counts are scoped exactly the way the delete is scoped. A
@@ -469,17 +489,33 @@ export function CrmInputUpload({
        *            byte-for-byte unchanged, so rolling back is one variable.
        */
       if (BATCH_UPLOAD_ENABLED) {
-        const id = await addUploadBatch(
+        /**
+         * ADD-ONLY with a duplicate guard: rows that already exist are
+         * SKIPPED, never overwritten. Nothing existing is updated.
+         */
+        const fresh = rowsToInsert(
           campaigns as unknown as Record<string, unknown>[],
+          existingCampaigns ?? []);
+
+        if (fresh.length === 0) {
+          setProgress(null);
+          setError("Every row in this file is already in the tool. Nothing was added.");
+          setSending(false);
+          return;
+        }
+
+        const id = await addUploadBatch(
+          fresh,
           isCrmSelf, fileName, fileHash ?? "", uploadName.trim());
         setProgress(null);
         setParsed([]);
         setToast(
-          `${campaigns.length} PN(s) added. Nothing existing was changed. `
+          `${fresh.length} PN(s) added. Nothing existing was changed. `
           + `You can reset this upload while no team has touched it.`);
         await log(null, profileId,
           isCrmSelf ? "CRM_SELF_PN_UPLOAD" : "CRM_INPUT_UPLOAD",
-          `${campaigns.length} rows added (batch ${id}).`);
+          `${fresh.length} rows added, ${campaigns.length - fresh.length} skipped `
+          + `as already present (batch ${id}).`);
         setSending(false);
         onDone();
         return;
@@ -583,6 +619,39 @@ export function CrmInputUpload({
           This exact file was uploaded on {fmtDate(priorUpload.created_at.slice(0, 10))}
           {priorUpload.file_name ? ` as "${priorUpload.file_name}"` : ""}. Uploading again
           adds a second copy of any row that is not already present.
+        </div>
+      )}
+
+      {BATCH_UPLOAD_ENABLED && uploadPlan && (
+        <div className="mt-4 rounded-lg border border-line px-4 py-3">
+          <p className="text-tiny font-600 text-heading">
+            New PNs to add: {uploadPlan.toAdd}
+            {" · "}Already in the tool, skipped: {uploadPlan.skipped.length}
+            {" · "}Existing PNs changed: 0{" · "}Deleted: 0
+          </p>
+          {uploadPlan.days.some((d) => d.dateAlreadyInTool) && (
+            <p className="mt-1.5 rounded-lg bg-warning-50 px-3 py-2 text-micro text-warning-700">
+              This file includes dates the tool already holds
+              ({uploadPlan.days.filter((d) => d.dateAlreadyInTool)
+                 .map((d) => fmtDate(d.date)).join(", ")}).
+              Only the new rows will be added; the existing PNs stay exactly
+              as they are.
+            </p>
+          )}
+          {uploadPlan.skipped.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5">
+              {uploadPlan.skipped.slice(0, 10).map((r, i) => (
+                <li key={`${r.date}-${r.slot}-${i}`} className="text-micro text-muted">
+                  Skipped: {fmtDate(r.date)} · slot {r.slot} · {r.category} · {r.segment}
+                </li>
+              ))}
+              {uploadPlan.skipped.length > 10 && (
+                <li className="text-micro text-faint">
+                  …and {uploadPlan.skipped.length - 10} more.
+                </li>
+              )}
+            </ul>
+          )}
         </div>
       )}
 
@@ -696,7 +765,11 @@ export function CrmInputUpload({
             )
           ) : (
             <Button onClick={handleReviewReplace} disabled={sending || checkingReplace}>
-              {checkingReplace ? "Checking..." : isCrmSelf ? `Save ${parsed.length} CRM Self PNs` : `Send ${parsed.length} campaigns to Category Team`}
+              {checkingReplace ? "Checking..."
+                : BATCH_UPLOAD_ENABLED
+                  ? `Add ${uploadPlan?.toAdd ?? parsed.length} new PNs`
+                  : isCrmSelf ? `Save ${parsed.length} CRM Self PNs`
+                  : `Send ${parsed.length} campaigns to Category Team`}
             </Button>
           )}
         </div>
