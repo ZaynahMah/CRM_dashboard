@@ -27,7 +27,7 @@ import {
   optionsFor, subcategoriesFor, isSubcategoryValid, isOffList,
   BULK_FILL_KEYS, isValidNewBrandCode, mergeOptions, isDuplicateOption,
 } from "@/lib/pnDropdowns";
-import { PN_TEMPLATES, PN_TYPES } from "@/config/pnOptions";
+import { PN_TEMPLATES, PN_TYPES, TITLE_BRIEFS } from "@/config/pnOptions";
 import {
   CATEGORY_REQUIRED, validateCategorySelection, isCategoryFieldFilled,
   type IncompleteCategoryPn,
@@ -352,7 +352,8 @@ const CATEGORY_COLUMNS: ColumnDef[] = [
   // Category's own brief, read-only for CRM. Wrapped, never clipped.
   { key: "brief", label: "Category Brief", width: 230, type: "readonly", longText: true },
   // Still editable by CRM, exactly as before.
-  { key: "title_brief", label: "Title Brief", width: 220, longText: true },
+  { key: "title_brief", label: "Title Brief", width: 190, type: "select",
+    options: TITLE_BRIEFS },
   { key: "message_brief", label: "Message Brief", width: 230, longText: true },
   // Ten options from src/config/pnOptions. An old stored value still shows,
   // flagged "not in list" by the off-list check in TrackingCell.

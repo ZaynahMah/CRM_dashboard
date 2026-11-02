@@ -23,6 +23,7 @@ const ROUTE_ROLES: Record<string, readonly string[]> = {
   // Operational management view: CRM and leadership only.
   "/sla":         ["CRM", "EXECUTIVE"],
   "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
+  "/storage":     ["CRM"],
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
   "/changes":     ["CATEGORY", "CRM"],
   "/performance": ["CRM", "EXECUTIVE"],

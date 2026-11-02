@@ -13,7 +13,10 @@ import { trackingCheck, suggestTrackingFields } from "@/lib/trackingCode";
 import { CHANNEL_FORMATS, LANDING_VALUES } from "@/lib/trackingMasters";
 import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
 import { optionsFor, isOffList } from "@/lib/pnDropdowns";
-import { PN_TEMPLATES, isLegacyTemplate, PN_TYPES } from "@/config/pnOptions";
+import {
+  PN_TEMPLATES, isLegacyTemplate, PN_TYPES,
+  TITLE_BRIEFS, isLegacyTitleBrief,
+} from "@/config/pnOptions";
 import { SendBackModal } from "./SendBackModal";
 import { EditInputModal } from "./EditInputModal";
 import {
@@ -517,8 +520,23 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
                     Send to Content is gated. */}
                 <div className="grid gap-3 md:grid-cols-2">
                   <Field label="Title Brief" required>
-                    <input defaultValue={campaign.title_brief ?? ""}
-                      onBlur={(e) => save({ title_brief: e.target.value })} />
+                    {/* Nine options from one shared constant. An OLD free-text
+                        value stays selectable so a save never rewrites it. */}
+                    <select defaultValue={campaign.title_brief ?? ""}
+                      onChange={(e) => save({ title_brief: e.target.value })}>
+                      <option value="">Select</option>
+                      {isLegacyTitleBrief(campaign.title_brief) && (
+                        <option value={campaign.title_brief ?? ""}>
+                          {campaign.title_brief}
+                        </option>
+                      )}
+                      {TITLE_BRIEFS.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                    {isLegacyTitleBrief(campaign.title_brief) && (
+                      <p className="mt-1 text-micro text-warning-700">
+                        not in list — pick a current option when convenient
+                      </p>
+                    )}
                     <FieldError show={missingKeys.includes("title_brief")} label="Title Brief" />
                   </Field>
                   <Field label="Message Brief" required>

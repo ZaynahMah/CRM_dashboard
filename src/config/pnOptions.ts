@@ -43,6 +43,34 @@ export const isLegacyTemplate = (v: string | null | undefined) => {
 };
 
 /**
+ * Title Brief — CRM's Part 2 angle for the copy.
+ *
+ * App-layer only, deliberately: NO database CHECK. Existing Title Briefs
+ * are free text and a constraint would reject them. Off-list values keep
+ * displaying with a "not in list" hint and are never auto-mapped.
+ */
+export const TITLE_BRIEFS = [
+  "Offer Led",
+  "Brand Led",
+  "Category Led",
+  "Sub Category Led",
+  "Minimal (Short)",
+  "Creative Content",
+  "Clickbait (Curiosity)",
+  "FOMO (Urgency)",
+  "Emoji Led",
+] as const;
+
+export type TitleBrief = (typeof TITLE_BRIEFS)[number];
+
+/** Is a stored Title Brief outside the current list? */
+export const isLegacyTitleBrief = (v: string | null | undefined) => {
+  const s = (v ?? "").trim();
+  if (!s) return false;
+  return !(TITLE_BRIEFS as readonly string[]).includes(s);
+};
+
+/**
  * PN Type — Content's fifth input. Exactly two values.
  * NULL is allowed: PNs that pre-date this field show "—".
  */

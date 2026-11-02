@@ -11,6 +11,7 @@ export const Icon = {
   swap: (p = 16) => <svg width={p} height={p} viewBox="0 0 24 24" {...s}><path d="M7 4 3 8l4 4M3 8h13a4 4 0 0 1 0 8h-1M17 20l4-4-4-4" /></svg>,
   alert: (p = 16) => <svg width={p} height={p} viewBox="0 0 24 24" {...s}><path d="M12 3 2 20h20zM12 10v4M12 17h.01" /></svg>,
   chart: (p = 16) => <svg width={p} height={p} viewBox="0 0 24 24" {...s}><path d="M3 20h18M7 20v-7M12 20V6M17 20v-4" /></svg>,
+  database: (p = 16) => <svg width={p} height={p} viewBox="0 0 24 24" {...s}><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></svg>,
   users: (p = 16) => <svg width={p} height={p} viewBox="0 0 24 24" {...s}><path d="M16 20v-1.5A3.5 3.5 0 0 0 12.5 15h-5A3.5 3.5 0 0 0 4 18.5V20M10 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M20 20v-1.5a3.5 3.5 0 0 0-2.6-3.4M15.4 5.1a3.5 3.5 0 0 1 0 6.8" /></svg>,
   bell: (p = 16) => <svg width={p} height={p} viewBox="0 0 24 24" {...s}><path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7M13.7 20a2 2 0 0 1-3.4 0" /></svg>,
   search: (p = 16) => <svg width={p} height={p} viewBox="0 0 24 24" {...s}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>,

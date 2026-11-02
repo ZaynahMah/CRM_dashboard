@@ -34,6 +34,9 @@ export const ROUTE_ROLES: Record<string, readonly AppRole[]> = {
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/sla":         ["CRM", "EXECUTIVE"],
   "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
+  // Storage deletes PN data permanently: CRM only, and every function
+  // behind it is CRM-only in Postgres too.
+  "/storage":     ["CRM"],
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
   "/changes":     ["CATEGORY", "CRM"],
   "/performance": ["CRM", "EXECUTIVE"],
