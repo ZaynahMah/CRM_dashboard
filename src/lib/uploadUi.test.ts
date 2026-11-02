@@ -56,11 +56,20 @@ describe("add-only is the DEFAULT; legacy is opt-in", () => {
     ]) expect(up).toContain(gated);
   });
 
-  it("with the flag OFF the old upload path is untouched", () => {
-    // The original RPC is still there, reached when the flag is false.
-    expect(up).toContain('"reset_campaigns_with_archive"');
-    expect(up.indexOf("if (BATCH_UPLOAD_ENABLED) {"))
-      .toBeLessThan(up.indexOf('"reset_campaigns_with_archive"'));
+  /**
+   * SUPERSEDED. The legacy replace path was REMOVED from the upload flow:
+   * it was reachable through the ungated confirm step and opened a
+   * "Full reset — this deletes every campaign" dialog on an add-only
+   * screen. An upload can no longer delete, archive or replace anything
+   * under any setting.
+   */
+  it("the legacy replace path is gone from the upload flow", () => {
+    const code = up
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .split(String.fromCharCode(10))
+      .filter((l) => !l.trim().startsWith("//")).join(String.fromCharCode(10));
+    expect(code).not.toContain("reset_campaigns_with_archive");
+    expect(code).not.toContain("upload_reset_preview");
   });
 });
 

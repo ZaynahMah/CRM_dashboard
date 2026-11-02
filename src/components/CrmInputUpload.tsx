@@ -176,25 +176,6 @@ function assignSlotsIfMissing(rows: ParsedRow[]): ParsedRow[] {
 
 
 interface SendResult { saved: number; failed: number; errors: string[]; note?: string }
-/** Stage breakdown returned by upload_reset_preview(), computed server-side
- *  so the numbers shown and the rows deleted come from the same query. */
-/**
- * Scoped to ONE planning stream. CRM Self and Category-led are independent:
- * resetting one must never touch the other, so the preview names both the
- * stream being replaced and the one left alone.
- */
-interface ReplacePreview {
-  stream: string;
-  total: number;
-  at_category: number;
-  with_content: number;
-  in_qc: number;
-  on_calendar: number;
-  emergencies: number;
-  change_requests: number;
-  unaffected_total: number;
-  unaffected_stream: string;
-}
 
 export function CrmInputUpload({
   profileId, isCrmSelf = false, onDone, existingCampaigns,
@@ -211,9 +192,7 @@ export function CrmInputUpload({
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [checkingReplace, setCheckingReplace] = useState(false);
-  const [replacePreview, setReplacePreview] = useState<ReplacePreview | null>(null);
   /** Typed confirmation. The button stays disabled until it reads RESET. */
-  const [confirmText, setConfirmText] = useState("");
   /** Shared success line for the upload and the batch reset. */
   const [toast, setToast] = useState<string | null>(null);
   /** SHA-256 of the chosen file, for the "already uploaded" warning. */
@@ -379,75 +358,22 @@ export function CrmInputUpload({
    * automatically via ON DELETE CASCADE in 01_schema.sql — nothing else
    * needs to be cleared separately.
    */
+  /**
+   * ADD-ONLY. There is nothing destructive to confirm, so the confirm button
+   * goes straight to the insert.
+   *
+   * THE BUG THIS REMOVES: this function used to call
+   * `upload_reset_preview()` and open a "Full reset — this deletes every
+   * campaign" dialog. That call was never gated on BATCH_UPLOAD_ENABLED, so
+   * the reset screen still appeared even though the SEND had been add-only
+   * since afdb692. The whole legacy path, the dialog and
+   * `reset_campaigns_with_archive` are now gone from the upload flow.
+   */
   const handleReviewReplace = async () => {
-    /**
-     * ADD-ONLY. Uploads never delete, archive, reset or update an existing
-     * PN, so there is nothing destructive to confirm — the per-day preview
-     * above already shows what will be added and what is skipped.
-     *
-     * The old path called `upload_reset_preview()` here and opened the
-     * "Full reset" modal. That call was never gated on BATCH_UPLOAD_ENABLED,
-     * which is why the reset screen still appeared even though the SEND
-     * itself had been add-only since afdb692.
-     */
-    if (BATCH_UPLOAD_ENABLED) {
-      await handleConfirmReplace();
-      return;
-    }
-
-    setCheckingReplace(true); setError(null);
-    try {
-      // Both counts are scoped exactly the way the delete is scoped. A
-      // confirmation that counts rows the delete will not touch is a
-      // confirmation that lies about what it is destroying.
-      // One server-side call. The old version ran two client queries whose
-      // predicates had to be kept in step with the delete by hand.
-      // Scoped by upload type: the counts must describe only the stream
-      // this upload replaces.
-      const { data: preview, error: prevErr } = await supabase
-        .rpc("upload_reset_preview", { p_is_crm_self: isCrmSelf });
-      if (prevErr) {
-        // The reset function is what performs the upload, so without it
-        // there is nothing useful to confirm. Say why, plainly, and stop
-        // before anything is touched.
-        if (isMigrationPending(prevErr)) {
-          setError(MIGRATION_PENDING_MESSAGE);
-          setReading(false);
-          return;
-        }
-        throw prevErr;
-      }
-      const p = Array.isArray(preview) ? preview[0] : preview;
-      setReplacePreview({
-        stream: p?.stream ?? (isCrmSelf ? "CRM Self" : "Category-led"),
-        unaffected_total: p?.unaffected_total ?? 0,
-        unaffected_stream: p?.unaffected_stream ?? (isCrmSelf ? "Category-led" : "CRM Self"),
-        total: p?.total ?? 0,
-        at_category: p?.at_category ?? 0,
-        with_content: p?.with_content ?? 0,
-        in_qc: p?.in_qc ?? 0,
-        on_calendar: p?.on_calendar ?? 0,
-        emergencies: p?.emergencies ?? 0,
-        change_requests: p?.change_requests ?? 0,
-      });
-    } catch (e) {
-      setError(extractErrorMessage(e));
-    }
-    setCheckingReplace(false);
+    await handleConfirmReplace();
   };
 
-  /**
-   * Full fresh start. Archives everything, deletes everything, inserts the
-   * uploaded sheet — all inside ONE server-side transaction, so a failure
-   * anywhere leaves the dashboard exactly as it was.
-   *
-   * There is deliberately NO client-side insert or delete path. The reset
-   * RPC is the only way an upload writes campaigns; a client fallback could
-   * insert without archiving, which is the partial wipe the RPC prevents.
-   */
   const handleConfirmReplace = async () => {
-    setReplacePreview(null);
-    setConfirmText("");
     setSending(true); setError(null); setResult(null);
     setProgress({ done: 0, total: 1 });
 
@@ -485,8 +411,8 @@ export function CrmInputUpload({
       /**
        * FLAG ON  → `add_upload_batch()`: ADD-ONLY. Inserts and nothing else,
        *            tagged with a batch so it can be undone.
-       * FLAG OFF → the existing `reset_campaigns_with_archive()` path,
-       *            byte-for-byte unchanged, so rolling back is one variable.
+       * The legacy replace path has been REMOVED: an upload can no longer
+       * delete, archive or replace anything, under any setting.
        */
       if (BATCH_UPLOAD_ENABLED) {
         /**
@@ -521,34 +447,9 @@ export function CrmInputUpload({
         return;
       }
 
-      const { data: batchId, error: resetErr } = await supabase.rpc(
-        "reset_campaigns_with_archive",
-        { p_rows: campaigns, p_is_crm_self: isCrmSelf }
-      );
-      if (resetErr) {
-        if (isMigrationPending(resetErr)) {
-          setProgress(null);
-          setError(MIGRATION_PENDING_MESSAGE);
-          setSending(false);
-          return;
-        }
-        throw resetErr;
-      }
+      throw new Error(
+        "Uploads are add-only. The legacy replace path has been removed.");
 
-      setProgress(null);
-      setResult({
-        saved: campaigns.length, failed: 0, errors: [],
-        note: `Dashboard reset. Previous data archived as batch ${String(batchId ?? "").slice(0, 8)}.`,
-      });
-      await log(null, profileId,
-        isCrmSelf ? "CRM_SELF_PN_UPLOAD" : "CRM_INPUT_UPLOAD",
-        `${isCrmSelf ? "CRM Self PN file" : "CRM input file"} uploaded: dashboard reset to ` +
-        `${campaigns.length} rows from ${fileName}.`);
-      if (!isCrmSelf) {
-        await notify("CATEGORY", "NEW_INPUT", "New campaign slots available",
-          `${campaigns.length} new campaigns from ${fileName} are ready for your input.`);
-      }
-      onDone();
     } catch (e) {
       setProgress(null);
       setError("Reset failed, so nothing was changed \u2014 your existing campaigns are intact. "
@@ -847,90 +748,6 @@ export function CrmInputUpload({
         </div>
       </Modal>
 
-      <Modal open={!!replacePreview} onClose={() => { setReplacePreview(null); setConfirmText(""); }}
-        title="Full reset — this deletes every campaign">
-        {replacePreview && (
-          <div className="space-y-4">
-            {/* A reset removes EVERYTHING, both flows, every status. The
-                breakdown is here so nobody confirms a number they did not
-                understand. */}
-            <div className="rounded-lg bg-warning-50 px-4 py-3 text-tiny text-warning-700">
-              <div>
-                <span className="font-medium">Upload type:</span> {replacePreview.stream}
-              </div>
-              <div className="mt-1">
-                <span className="font-medium">Running rows to archive and replace:</span>{" "}
-                {replacePreview.total} — replaced with this file&rsquo;s{" "}
-                <span className="font-medium">{parsed.length}</span> rows.
-              </div>
-              <div className="mt-1">
-                <span className="font-medium">Rows unaffected:</span>{" "}
-                {replacePreview.unaffected_total} {replacePreview.unaffected_stream} campaign
-                {replacePreview.unaffected_total === 1 ? "" : "s"} — these are a separate
-                planning stream and will not be touched.
-              </div>
-            </div>
-
-            <ul className="divide-y divide-line rounded-lg border border-line text-tiny">
-              {[
-                ["At Category", replacePreview.at_category],
-                ["With Content", replacePreview.with_content],
-                ["In QC", replacePreview.in_qc],
-                ["On Calendar", replacePreview.on_calendar],
-                ["Emergency PNs", replacePreview.emergencies],
-                ["Open change requests", replacePreview.change_requests],
-              ].map(([label, n]) => (
-                <li key={String(label)} className="flex justify-between px-3 py-1.5">
-                  <span className={label === "On Calendar" && Number(n) > 0 ? "font-medium text-danger-700" : "text-muted"}>
-                    {label}
-                  </span>
-                  <span className={label === "On Calendar" && Number(n) > 0 ? "font-medium text-danger-700" : "tabular-nums text-heading"}>
-                    {n}
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            {replacePreview.on_calendar > 0 && (
-              <div className="rounded-lg bg-danger-50 px-4 py-3 text-tiny text-danger-700">
-                <span className="font-medium">
-                  {replacePreview.on_calendar} campaign{replacePreview.on_calendar === 1 ? " is" : "s are"} already
-                  live on the Calendar.
-                </span>{" "}
-                They will be removed from the Calendar, Final View and the export. Everything is
-                archived first and can be recovered, but the live calendar will be empty until the
-                new sheet is processed.
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5">
-              <Button size="sm" variant="ghost" disabled={downloading} onClick={downloadBackup}>
-                {downloading ? "Preparing..." : "Download backup (Excel)"}
-              </Button>
-              <span className="text-micro text-faint">
-                Everything is archived in the database as well — this is your own copy.
-              </span>
-            </div>
-
-            <div>
-              <label className="text-tiny text-muted">
-                Type <span className="font-mono font-medium text-heading">RESET</span> to confirm
-              </label>
-              <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
-                placeholder="RESET" className="mt-1 !font-mono" autoFocus />
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => { setReplacePreview(null); setConfirmText(""); }}>
-                Cancel
-              </Button>
-              <Button variant="danger" disabled={confirmText !== "RESET"} onClick={handleConfirmReplace}>
-                Delete {replacePreview.total} and load {parsed.length}
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </Card>
   );
 }
