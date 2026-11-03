@@ -18,19 +18,26 @@ import { createServerClient } from "@supabase/ssr";
 
 /** Which roles may reach which route prefix. Mirrors the nav in AppShell. */
 const ROUTE_ROLES: Record<string, readonly string[]> = {
+  /*
+   * REMOVED PAGES. Listed with NO roles rather than deleted from this map:
+   * an unlisted path falls through to "allowed" below, so removing the
+   * entry would have opened /qc and /audience to everyone instead of
+   * blocking them. An empty list matches no role, so every visit is turned
+   * away. This mirrors ROUTE_ROLES in lib/accessPolicy.ts.
+   */
+  "/qc":          [],
+  "/audience":    [],
   "/overview":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/campaigns":   ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   // Operational management view: CRM and leadership only.
   "/sla":         ["CRM", "EXECUTIVE"],
-  "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/storage":     ["CRM"],
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
-  "/changes":     ["CATEGORY", "CRM"],
+  "/changes":     ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/performance": ["CRM", "EXECUTIVE"],
   "/segments":    ["CRM"],
   "/final-view":  ["CRM"],
-  "/qc":          ["CRM"],
 };
 
 export async function middleware(req: NextRequest) {

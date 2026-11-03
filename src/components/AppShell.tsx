@@ -15,14 +15,12 @@ const NAV: NavItem[] = [
   { group:"General",href:"/campaigns",label:"All Campaigns",icon:Icon.list,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"General",href:"/calendar",label:"Calendar",icon:Icon.calendar,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"Planning",href:"/segments",label:"Audiences",icon:Icon.target,roles:["CRM"] },
-  { group:"Planning",href:"/audience",label:"Audience",icon:Icon.users,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"Planning",href:"/storage",label:"Storage",icon:Icon.database,roles:["CRM"] },
   { group:"Planning",href:"/sla",label:"Team SLA & Accountability",icon:Icon.alert,roles:["CRM","EXECUTIVE"] },
   { group:"Planning",href:"/emergency",label:"Emergency",icon:Icon.alert,roles:["CATEGORY","CRM","CONTENT"] },
   { group:"Execution",href:"/final-view",label:"Final View",icon:Icon.list,roles:["CRM"] },
-  { group:"Execution",href:"/qc",label:"Final QC",icon:Icon.check,roles:["CRM"] },
   { group:"Execution",href:"/performance",label:"Performance",icon:Icon.chart,roles:["CRM","EXECUTIVE"] },
-  { group:"Execution",href:"/changes",label:"Changes",icon:Icon.swap,roles:["CATEGORY","CRM"] },
+  { group:"Execution",href:"/changes",label:"Changes",icon:Icon.swap,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
 ];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { profile, loading, reconnecting, refresh, beginSignOut } = useSession();
