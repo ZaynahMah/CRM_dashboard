@@ -97,14 +97,23 @@ describe("the Audience page", () => {
     expect(page).toContain("Show full definition");
   });
 
-  it("is visible to all four roles", () => {
-    const shell = read("../components/AppShell.tsx");
-    const line = shell.split("\n").find((l) => l.includes('href:"/audience"'))!;
-    for (const r of ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"]) expect(line).toContain(r);
+  /**
+   * SUPERSEDED. Audience was removed from the nav and from ROUTE_ROLES in
+   * every login. The page file and cohort_informations.json are KEPT on
+   * purpose — the data is reference material — but nothing routes to it.
+   */
+  it("is no longer in the sidebar for any role", () => {
+    expect(read("../components/AppShell.tsx")).not.toContain('href:"/audience"');
   });
 
-  it("the route guard matches the sidebar", () => {
-    expect(read("../middleware.ts")).toContain('"/audience"');
-    expect(read("../lib/accessPolicy.ts")).toContain('"/audience"');
+  it("is explicitly DENIED, not merely unlisted", () => {
+    // An unlisted path falls through to "allowed", so the entry stays with
+    // an empty role list: it matches no role and every visit is refused.
+    expect(read("../middleware.ts")).toContain('"/audience":    []');
+    expect(read("../lib/accessPolicy.ts")).toContain('"/audience":    []');
+  });
+
+  it("the page file and its data are still in the repo", () => {
+    expect(read("../app/(app)/audience/page.tsx").length).toBeGreaterThan(0);
   });
 });

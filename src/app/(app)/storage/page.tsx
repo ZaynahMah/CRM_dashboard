@@ -6,6 +6,7 @@ import { Button, Card, Empty, Loading, PageHead, Pill } from "@/components/ui";
 import { fmtDate, fmtRelative } from "@/lib/format";
 import {
   listDays, dayStatus, dayBlockers, downloadDayBackup, deleteDay,
+  forceDeleteDay, isTataUnistoreId,
   listDeleteAudit, rememberedStorageName, rememberStorageName,
   type DayStatus, type Blocker, type DayAudit, type BackupResult,
 } from "@/services/storageDays";
@@ -35,6 +36,12 @@ export default function StoragePage() {
   const [name, setName] = useState(() => rememberedStorageName());
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+
+  /* ── Force delete: any day, whatever its state ── */
+  const [forceOpen, setForceOpen] = useState<string | null>(null);
+  const [forceBackup, setForceBackup] = useState<BackupResult | null>(null);
+  const [tataId, setTataId] = useState("");
+  const [forceTyped, setForceTyped] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -71,6 +78,24 @@ export default function StoragePage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const runForceDelete = async (day: string) => {
+    if (!forceBackup) return;
+    setBusy(true); setError(null);
+    try {
+      const n = await forceDeleteDay(
+        day, forceBackup.sha, forceBackup.fileName, name, tataId);
+      rememberStorageName(name);
+      setDone(`${day}: ${n} PN${n === 1 ? "" : "s"} force deleted.`);
+      setForceOpen(null); setForceBackup(null);
+      setForceTyped(""); setTataId("");
+      await load();
+    } catch (e) {
+      // Never a success message for a failed delete.
+      setError(e instanceof Error ? e.message : String(e));
+    }
+    setBusy(false);
   };
 
   const runDelete = async (day: string) => {
@@ -176,12 +201,98 @@ export default function StoragePage() {
                       )}
                     </td>
                     <td>
-                      {s.eligible && !isOpen && (
+                      {s.eligible && !isOpen && forceOpen !== day && (
                         <Button size="sm" variant="ghost"
                           onClick={() => { setOpen(day); setBackup(null);
                                            setTyped(""); setError(null); }}>
                           Delete this day
                         </Button>
+                      )}
+
+                      {/* Force delete: ANY day, whatever its state. */}
+                      {!isOpen && forceOpen !== day && (
+                        <Button size="sm" variant="danger"
+                          onClick={() => {
+                            setForceOpen(day); setForceBackup(null);
+                            setForceTyped(""); setTataId(""); setError(null);
+                          }}>
+                          Force delete this day
+                        </Button>
+                      )}
+
+                      {forceOpen === day && (
+                        <div className="space-y-2 py-2">
+                          <div className="rounded-lg border border-[#FDA29B] bg-danger-50 px-3 py-2">
+                            <p className="text-tiny font-600 text-danger-700">
+                              Force delete {fmtDate(day)} — {s.total_pns} PN
+                              {s.total_pns === 1 ? "" : "s"}
+                            </p>
+                            <p className="mt-1 text-micro text-danger-700">
+                              This deletes PNs teams may still be working on.
+                              The backup you just downloaded is the only copy.
+                              This cannot be undone.
+                            </p>
+                            <p className="mt-1 text-micro text-danger-700">
+                              {s.blocking} not on the calendar
+                              {s.still_with_category > 0 && ` · ${s.still_with_category} with Category`}
+                              {s.still_with_content > 0 && ` · ${s.still_with_content} with Content`}
+                              {s.pending_crm > 0 && ` · ${s.pending_crm} with CRM review`}
+                            </p>
+                            <p className="mt-1 text-micro text-danger-700">
+                              It disappears from the Calendar, Final View, every
+                              export and Executive numbers.
+                            </p>
+                          </div>
+
+                          <Button size="sm" variant="ghost" disabled={busy}
+                            onClick={async () => {
+                              setError(null);
+                              try { setForceBackup(await downloadDayBackup(day)); }
+                              catch (e) {
+                                setError(e instanceof Error ? e.message : String(e));
+                              }
+                            }}>
+                            {forceBackup
+                              ? "Backup downloaded — download again"
+                              : "1. Download backup"}
+                          </Button>
+                          {forceBackup && (
+                            <p className="text-micro text-success-700">
+                              {Object.entries(forceBackup.counts)
+                                .filter(([, n]) => n > 0)
+                                .map(([t, n]) => `${t} ${n}`).join(" · ")}
+                            </p>
+                          )}
+
+                          <input value={name} onChange={(e) => setName(e.target.value)}
+                            placeholder="2. Your name"
+                            className="!m-0 !w-[220px] !py-1 !text-[12px]" />
+                          <input value={tataId} onChange={(e) => setTataId(e.target.value)}
+                            placeholder="3. you@tataunistore.com"
+                            className="!m-0 !w-[220px] !py-1 !text-[12px]" />
+                          {tataId.trim() !== "" && !isTataUnistoreId(tataId) && (
+                            <p className="text-micro text-danger-700">
+                              Must be an @tataunistore.com address.
+                            </p>
+                          )}
+                          <input value={forceTyped}
+                            onChange={(e) => setForceTyped(e.target.value)}
+                            placeholder="4. Type DELETE"
+                            className="!m-0 !w-[220px] !py-1 !font-mono !text-[12px]" />
+
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="ghost" disabled={busy}
+                              onClick={() => { setForceOpen(null); setForceBackup(null); }}>
+                              Cancel
+                            </Button>
+                            <Button size="sm" variant="danger"
+                              disabled={busy || !forceBackup || forceTyped !== "DELETE"
+                                || name.trim() === "" || !isTataUnistoreId(tataId)}
+                              onClick={() => void runForceDelete(day)}>
+                              {busy ? "Deleting..." : `Force delete ${s.total_pns} PNs`}
+                            </Button>
+                          </div>
+                        </div>
                       )}
                       {isOpen && (
                         <div className="space-y-2 py-2">
@@ -249,6 +360,14 @@ export default function StoragePage() {
                 <span className="text-micro text-muted">
                   {a.campaigns_removed} PN{a.campaigns_removed === 1 ? "" : "s"}
                 </span>
+                {a.forced && (
+                  <Pill dot={false} tone="danger" label="Forced" />
+                )}
+                {a.performed_by_tataunistore_id && (
+                  <span className="text-micro text-faint">
+                    {a.performed_by_tataunistore_id}
+                  </span>
+                )}
                 <span className="ml-auto text-micro text-faint">
                   {a.performed_name} · {fmtRelative(a.created_at)}
                 </span>

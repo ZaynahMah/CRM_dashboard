@@ -37,7 +37,14 @@ export interface DayAudit {
   campaigns_removed: number;
   children_removed: Record<string, number> | null;
   created_at: string;
+  /** Set when the day was removed with Force delete. */
+  forced: boolean | null;
+  performed_by_tataunistore_id: string | null;
 }
+
+/** A TataUnistore ID, validated the same way `force_delete_day` does. */
+export const isTataUnistoreId = (v: string) =>
+  /^[a-z0-9._%+-]+@tataunistore\.com$/.test(v.trim().toLowerCase());
 
 /** Every day that has PNs, with its counts. */
 export async function listDays(): Promise<string[]> {
@@ -111,6 +118,31 @@ export async function deleteDay(
     p_backup_sha: backupSha,
     p_backup_name: backupName,
     p_by_name: byName.trim(),
+  });
+  if (error) throw friendly(error);
+  return Number(data ?? 0);
+}
+
+/**
+ * Force delete: removes a day WHATEVER its state.
+ *
+ * It skips only the "every PN on the calendar" check. Every other guard
+ * holds — CRM only, row locks, the backup signature re-checked inside the
+ * transaction, the audit row — and the audit records the TataUnistore ID
+ * and a `forced` flag so it is always distinguishable afterwards.
+ *
+ * There is no undo. The backup the caller just downloaded is the only copy.
+ */
+export async function forceDeleteDay(
+  day: string, backupSha: string, backupName: string,
+  byName: string, tataUnistoreId: string
+): Promise<number> {
+  const { data, error } = await supabase.rpc("force_delete_day", {
+    p_day: day,
+    p_backup_sha: backupSha,
+    p_backup_name: backupName,
+    p_by_name: byName.trim(),
+    p_tataunistore_id: tataUnistoreId.trim().toLowerCase(),
   });
   if (error) throw friendly(error);
   return Number(data ?? 0);

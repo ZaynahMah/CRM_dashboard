@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeRequestGroups } from "@/components/ChangeRequestGroups";
+import { ChangesView } from "@/components/ChangesView";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/components/SessionProvider";
 import {
@@ -37,7 +37,10 @@ export default function ChangesPage() {
 
       {/* Multi-field requests (migration 38), reviewed as one decision.
           The single-field list below stays for requests raised before it. */}
-      <ChangeRequestGroups campaigns={Object.values(campaigns)} onChanged={load} />
+      {/* Every role, one component. RLS decides what each one sees; the
+          Executive variant is read-only. */}
+      <ChangesView role={profile.role} campaigns={Object.values(campaigns)}
+        onChanged={load} />
 
       {requests.length === 0 ? (
         <Card><Empty title="No change requests" hint="Requests raised against locked campaigns will collect here." /></Card>

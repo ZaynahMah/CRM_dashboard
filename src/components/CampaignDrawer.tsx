@@ -347,7 +347,7 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
                 <Button size="sm" variant="ghost" disabled={withdrawBusy}
                   onClick={async () => {
                     const who = rememberedRequestName();
-                    if (!who) { setEditError("Enter your name in Edit input first."); return; }
+                    if (!who) { setEditError("Enter your name in the change form first."); return; }
                     setWithdrawBusy(true); setEditError(null);
                     try {
                       await withdrawChangeGroup(myPending.groupId, who);
@@ -368,7 +368,7 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
                 <Button size="sm" variant="ghost"
                   disabled={editGate(campaign, role) !== undefined}
                   onClick={() => { setEditError(null); setEditOpen(true); }}>
-                  Edit input
+                  Send these changes to CRM
                 </Button>
               </span>
             )}

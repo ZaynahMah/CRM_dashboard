@@ -72,7 +72,8 @@ describe("A — the delete flow", () => {
   it("shows blockers with links, and no Delete button when not ready", () => {
     expect(page).toContain("Not ready: {s.blocking} PN");
     expect(page).toContain("/campaigns?open=${b.id}");
-    expect(page).toContain("{s.eligible && !isOpen && (");
+    // Force delete sits beside it, so the condition now excludes that too.
+    expect(page).toContain("{s.eligible && !isOpen && forceOpen !== day && (");
   });
 
   it("states in plain words what disappears", () => {

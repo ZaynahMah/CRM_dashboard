@@ -47,8 +47,22 @@ describe("each team may propose only its own fields", () => {
 /* ══════════ when Edit input is available ══════════ */
 describe("the Edit input gate", () => {
   it("is open once that team has submitted", () => {
-    expect(editGate(pn(), "CATEGORY")).toBeUndefined();
+    // Category's window needs content_status still NOT_ASSIGNED.
+    expect(editGate(pn({ content_status: "NOT_ASSIGNED" }), "CATEGORY")).toBeUndefined();
     expect(editGate(pn(), "CONTENT")).toBeUndefined();
+  });
+
+  /** Migration 42: Category's window closes at the handoff to Content. */
+  it("closes for Category once the PN is sent to Content", () => {
+    for (const st of ["PENDING", "SUBMITTED", "NEEDS_CHANGES"]) {
+      expect(editGate(pn({ content_status: st } as never), "CATEGORY"))
+        .toBe("Already sent to Content. Ask CRM.");
+    }
+  });
+
+  it("Content is unaffected by that cut-off", () => {
+    expect(editGate(pn({ content_status: "SUBMITTED" } as never), "CONTENT"))
+      .toBeUndefined();
   });
 
   it('says "On calendar" for a finalised PN', () => {
@@ -177,9 +191,9 @@ describe("item 5 — a calendar PN is read-only for everyone", () => {
 
 /* ══════════ UI wiring ══════════ */
 describe("the drawer wiring", () => {
-  it("offers Edit input to Category and Content only", () => {
+  it("offers the change form to Category and Content only", () => {
     expect(drawer).toContain('(role === "CATEGORY" || role === "CONTENT") && (');
-    expect(drawer).toContain("Edit input");
+    expect(drawer).toContain("Send these changes to CRM");
   });
 
   it("shows the pending state and a withdraw", () => {

@@ -29,20 +29,26 @@ export function canReadCampaign(role: AppRole, c: Campaign): boolean {
 
 /** Mirrors the route table in `src/middleware.ts`. */
 export const ROUTE_ROLES: Record<string, readonly AppRole[]> = {
+  /*
+   * REMOVED PAGES. Listed with NO roles rather than deleted from this map:
+   * an unlisted path falls through to "allowed", so removing the entry
+   * would have opened /qc and /audience to everyone instead of blocking
+   * them. An empty list matches no role, so every visit is turned away.
+   */
+  "/qc":          [],
+  "/audience":    [],
   "/overview":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/campaigns":   ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/sla":         ["CRM", "EXECUTIVE"],
-  "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   // Storage deletes PN data permanently: CRM only, and every function
   // behind it is CRM-only in Postgres too.
   "/storage":     ["CRM"],
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
-  "/changes":     ["CATEGORY", "CRM"],
+  "/changes":     ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/performance": ["CRM", "EXECUTIVE"],
   "/segments":    ["CRM"],
   "/final-view":  ["CRM"],
-  "/qc":          ["CRM"],
 };
 
 export function canVisit(role: AppRole, path: string): boolean {

@@ -36,6 +36,8 @@ const CATEGORY_MANDATORY = new Set([
   "expected_cvr", "expected_rpv",
 ]);
 
+export type RequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "WITHDRAWN";
+
 export interface ChangeRequestRow {
   id: string;
   campaign_id: string;
@@ -49,6 +51,7 @@ export interface ChangeRequestRow {
   requested_by_role: string | null;
   reviewed_by_name: string | null;
   review_note: string | null;
+  reviewed_at: string | null;
   created_at: string;
 }
 
@@ -63,9 +66,18 @@ export function editableFieldsFor(role: string): readonly string[] {
 export function editGate(c: Campaign, role: string): string | undefined {
   if (c.calendar_status === "UPDATED") return "On calendar";
   if (role === "CATEGORY") {
-    return c.category_submitted_at
-      ? undefined
-      : "Not submitted yet — edit it directly";
+    if (!c.category_submitted_at) return "Not submitted yet — edit it directly";
+    /**
+     * Category's window closes when CRM hands the PN to Content.
+     *
+     * `content_status` is the marker, not `crm_status`: crm_status keeps
+     * advancing (SENT_TO_CONTENT → FINAL_QC → READY), so an equality test
+     * on it would re-open the gate at Final QC. `content_status` leaves
+     * NOT_ASSIGNED in the same write as the handoff and never returns.
+     * Migration 42 enforces exactly this rule server-side.
+     */
+    if (c.content_status !== "NOT_ASSIGNED") return "Already sent to Content. Ask CRM.";
+    return undefined;
   }
   if (role === "CONTENT") {
     return c.content_submitted_at
@@ -156,6 +168,42 @@ export async function withdrawChangeGroup(
   return Number(data ?? 0);
 }
 
+
+export interface RequestFilters {
+  status?: RequestStatus;
+  /** Campaign ids to keep — resolved from the category filter. */
+  campaignIds?: string[];
+  from?: string;
+  to?: string;
+}
+
+/**
+ * Requests for one status, newest first.
+ *
+ * Filtering happens IN THE QUERY, not per row: with many requests a
+ * client-side pass would fetch everything and then discard most of it.
+ * RLS (migration 42) already limits each team to its own rows.
+ */
+export async function listRequests(
+  filters: RequestFilters = {}
+): Promise<ChangeRequestRow[]> {
+  let q = supabase.from("change_requests").select("*");
+  if (filters.status) q = q.eq("status", filters.status);
+  if (filters.campaignIds) {
+    if (filters.campaignIds.length === 0) return [];   // nothing can match
+    q = q.in("campaign_id", filters.campaignIds);
+  }
+  if (filters.from) q = q.gte("created_at", `${filters.from}T00:00:00`);
+  if (filters.to) q = q.lte("created_at", `${filters.to}T23:59:59`);
+
+  const { data, error } = await q.order("created_at", { ascending: false });
+  if (error) {
+    if (/does not exist|column/i.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []) as ChangeRequestRow[];
+}
+
 /** Pending requests, newest first. RLS limits what each role sees. */
 export async function listPendingRequests(): Promise<ChangeRequestRow[]> {
   const { data, error } = await supabase
@@ -211,3 +259,64 @@ export const rememberedRequestName = () => {
 export const rememberRequestName = (n: string) => {
   try { localStorage.setItem(NAME_KEY, n.trim()); } catch { /* ignore */ }
 };
+
+
+/* ─────────────── the latest decision on a PN, for its badge ─────────────── */
+
+export interface PnRequestBadge {
+  status: RequestStatus;
+  label: string;
+  tone: "warning" | "success" | "danger";
+  reason: string | null;
+}
+
+/** The newest request per campaign, whatever its status. */
+export function latestByCampaign(
+  rows: ChangeRequestRow[]
+): Map<string, ChangeRequestRow> {
+  const out = new Map<string, ChangeRequestRow>();
+  // Rows arrive newest-first, so the first seen per campaign is its latest.
+  for (const r of rows) if (!out.has(r.campaign_id)) out.set(r.campaign_id, r);
+  return out;
+}
+
+export function badgeFor(r: ChangeRequestRow | undefined): PnRequestBadge | null {
+  if (!r) return null;
+  switch (r.status) {
+    case "PENDING":
+      return { status: "PENDING", label: "Change pending CRM approval",
+               tone: "warning", reason: null };
+    case "APPROVED":
+      return { status: "APPROVED", label: "Change accepted by CRM",
+               tone: "success", reason: null };
+    case "REJECTED":
+      return { status: "REJECTED",
+               label: `Change rejected by CRM${r.review_note ? `: ${r.review_note}` : ""}`,
+               tone: "danger", reason: r.review_note };
+    default:
+      return null;                      // WITHDRAWN needs no badge
+  }
+}
+
+/**
+ * Decisions this team has not opened yet.
+ *
+ * A localStorage high-water mark, deliberately: counting unseen decisions
+ * needs persistence, and a column would mean a migration for a badge whose
+ * usefulness is still unproven. It resets per browser, which is the
+ * trade-off.
+ */
+const SEEN_KEY = "cliq.changes.seenAt";
+export const changesSeenAt = () => {
+  try { return localStorage.getItem(SEEN_KEY) ?? ""; } catch { return ""; }
+};
+export const markChangesSeen = () => {
+  try { localStorage.setItem(SEEN_KEY, new Date().toISOString()); } catch { /* ignore */ }
+};
+
+/** How many decisions landed since this browser last opened Changes. */
+export function unseenDecisions(rows: ChangeRequestRow[], seenAt: string): number {
+  if (!seenAt) return 0;
+  return rows.filter((r) =>
+    r.status !== "PENDING" && (r.reviewed_at ?? r.created_at) > seenAt).length;
+}

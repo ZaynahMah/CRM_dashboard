@@ -58,7 +58,7 @@ export function EditInputModal({ campaign, role, open, onClose, onRaised }: {
 
   return (
     <Modal open={open} onClose={onClose} z="z-[90]"
-      title="Edit input"
+      title="Send these changes to CRM"
       sub="This asks CRM to approve the change. The PN does not change until they accept.">
       <div className="space-y-4">
         {fields.map((f) => {

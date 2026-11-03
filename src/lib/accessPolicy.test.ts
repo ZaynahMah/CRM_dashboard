@@ -60,8 +60,9 @@ describe("read policy (migration 17 campaigns_read)", () => {
 
 /* ───────── finding 9: route guards ───────── */
 describe("route guards (middleware)", () => {
+  /** /qc was removed from the nav and from ROUTE_ROLES. */
   it("CRM-only routes reject every other role", () => {
-    for (const path of ["/qc", "/final-view", "/segments"]) {
+    for (const path of ["/final-view", "/segments"]) {
       expect(canVisit("CRM", path)).toBe(true);
       for (const role of ["CATEGORY", "CONTENT", "EXECUTIVE"] as const) {
         expect(canVisit(role, path)).toBe(false);
@@ -71,7 +72,8 @@ describe("route guards (middleware)", () => {
 
   it("EXECUTIVE cannot reach the operational queues", () => {
     expect(canVisit("EXECUTIVE", "/emergency")).toBe(false);
-    expect(canVisit("EXECUTIVE", "/changes")).toBe(false);
+    // Executive sees all requests, read-only.
+    expect(canVisit("EXECUTIVE", "/changes")).toBe(true);
   });
 
   it("EXECUTIVE can reach reporting", () => {
@@ -80,13 +82,25 @@ describe("route guards (middleware)", () => {
   });
 
   it("CONTENT cannot reach /changes or /performance", () => {
-    expect(canVisit("CONTENT", "/changes")).toBe(false);
+    // Content now has its own Changes page (its own requests only).
+    expect(canVisit("CONTENT", "/changes")).toBe(true);
     expect(canVisit("CONTENT", "/performance")).toBe(false);
   });
 
   it("nested paths inherit the parent rule", () => {
-    expect(canVisit("CONTENT", "/qc/some-id")).toBe(false);
-    expect(canVisit("CRM", "/qc/some-id")).toBe(true);
+    expect(canVisit("CONTENT", "/storage/some-id")).toBe(false);
+    expect(canVisit("CRM", "/storage/some-id")).toBe(true);
+  });
+
+  /**
+   * /qc and /audience were removed from the nav AND from ROUTE_ROLES, so an
+   * unlisted path is not reachable by anyone — typing the URL does nothing.
+   */
+  it("the removed pages are unreachable for every role", () => {
+    for (const r of ["CRM", "CATEGORY", "CONTENT", "EXECUTIVE"]) {
+      expect(canVisit(r as never, "/qc"), r).toBe(false);
+      expect(canVisit(r as never, "/audience"), r).toBe(false);
+    }
   });
 
   it("every role can reach the shared dashboard", () => {
