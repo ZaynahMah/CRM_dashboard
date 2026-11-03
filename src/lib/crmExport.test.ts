@@ -28,10 +28,12 @@ describe("Incoming Inputs From Category export", () => {
   const csv = incomingFromCategoryCsv([pn()]);
 
   it("starts with the specified column order", () => {
-    expect(head(csv).slice(0, 18)).toEqual([
+    expect(head(csv).slice(0, 19)).toEqual([
       "Status", "Deadline", "Date", "Time", "Slot", "Segment", "Category",
       "Campaign Name", "Sub Category", "Brand", "Offer", "Brief", "Landing",
-      "Exp. CVR", "Exp. RPV", "Comments", "Filled by", "Submitted at",
+      // Date / Time Brief joined the Category block.
+      "Exp. CVR", "Exp. RPV", "Comments", "Date / Time Brief",
+      "Filled by", "Submitted at",
     ]);
   });
 

@@ -7,6 +7,7 @@ import { SendBackModal } from "./SendBackModal";
 import { bulkSendBackToContent } from "@/services/sendBack";
 import {
   incomingFromCategoryCsv, incomingFromContentCsv, sectionFileName, downloadSection,
+  incomingFromCategoryRows, incomingFromContentRows,
 } from "@/services/crmSectionExport";
 import { Icon } from "./icons";
 import { fmtDate, fmtTime } from "@/lib/format";
@@ -188,6 +189,7 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
           // and the file always agree.
           rows: categoryLed.filter((c) =>
             fromCategoryPending(c) || fromCategoryCompleted(c) || isDefaulted(c)),
+          eligible: incomingFromCategoryRows,
           build: incomingFromCategoryCsv,
           section: "Incoming_From_Category",
         }}
@@ -209,6 +211,7 @@ export function CrmFlowBoard({ campaigns, qc, profileId, onChanged, onOpen, stal
         exportCsv={{
           rows: categoryLed.filter((c) => fromContentPending(c, qc) || fromContentReady(c, qc)),
           build: incomingFromContentCsv,
+          eligible: incomingFromContentRows,
           section: "Incoming_From_Content_Category_led",
         }}
         pending={{
@@ -355,7 +358,13 @@ function FlowSection({ step, title, pending, completed, inFlight, showAll, expor
    * the count is the rows actually being exported, so it always matches the
    * file.
    */
-  exportCsv?: { rows: Campaign[]; build: (rows: Campaign[]) => string; section: string };
+  exportCsv?: {
+    rows: Campaign[];
+    build: (rows: Campaign[]) => string;
+    section: string;
+    /** Narrows `rows` to exactly what the file will contain. */
+    eligible?: (rows: Campaign[]) => Campaign[];
+  };
   qc: QcMap;
   onChanged: () => void;
   onOpen: (id: string) => void;
@@ -370,16 +379,28 @@ function FlowSection({ step, title, pending, completed, inFlight, showAll, expor
         </span>
         <h3 className="font-display text-[15px] font-600 text-heading">{title}</h3>
         <div className="ml-auto flex items-center gap-2">
-          {exportCsv && (
-            <span title={exportCsv.rows.length === 0 ? "Nothing to export" : undefined}>
-            <Button size="sm" variant="ghost"
-              disabled={exportCsv.rows.length === 0}
-              onClick={() => downloadSection(
-                exportCsv.build(exportCsv.rows), sectionFileName(exportCsv.section))}>
-              Export (CSV) ({exportCsv.rows.length})
-            </Button>
-            </span>
-          )}
+          {exportCsv && (() => {
+            /**
+             * The count is of the rows that will actually be written — only
+             * PNs the owning team has SUBMITTED — so the number on the
+             * button and the rows in the file always agree, and an empty
+             * export is refused rather than downloading a header-only file.
+             */
+            const eligible = exportCsv.eligible
+              ? exportCsv.eligible(exportCsv.rows)
+              : exportCsv.rows;
+            return (
+              <span title={eligible.length === 0
+                ? "Nothing submitted yet — nothing to export" : undefined}>
+                <Button size="sm" variant="ghost"
+                  disabled={eligible.length === 0}
+                  onClick={() => downloadSection(
+                    exportCsv.build(exportCsv.rows), sectionFileName(exportCsv.section))}>
+                  Export (CSV) ({eligible.length})
+                </Button>
+              </span>
+            );
+          })()}
           {showAll && showAll.rows.length > 0 && (
             <Button size="sm" variant="ghost" onClick={() => showAll.open(showAll.rows)}>
               {showAll.label} ({showAll.rows.length})

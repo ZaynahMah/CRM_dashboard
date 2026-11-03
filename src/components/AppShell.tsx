@@ -25,7 +25,7 @@ const NAV: NavItem[] = [
   { group:"Execution",href:"/changes",label:"Changes",icon:Icon.swap,roles:["CATEGORY","CRM"] },
 ];
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { profile, loading } = useSession();
+  const { profile, loading, reconnecting, refresh } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
@@ -70,7 +70,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => onChangeRequestsUpdated(refreshPendingChanges),
     [refreshPendingChanges]);
-  useEffect(() => { if (!loading && !profile) router.replace("/login"); }, [loading, profile, router]);
+  /**
+   * Redirect ONLY on a genuine "no session".
+   *
+   * While `reconnecting` is true the last load FAILED — the session may be
+   * perfectly valid — so the page stays exactly where it is and the banner
+   * below explains. Redirecting here used to discard unsaved Show All PN
+   * edits, which live in component state.
+   */
+  useEffect(() => {
+    if (!loading && !profile && !reconnecting) router.replace("/login");
+  }, [loading, profile, reconnecting, router]);
   useEffect(() => { setNavOpen(false); }, [pathname]);
   if (loading || !profile) return <div className="grid h-screen place-items-center"><span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" /></div>;
   const items = NAV.filter((n) => n.roles.includes(profile.role));
@@ -79,6 +89,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const current = items.find((i) => i.href === pathname);
   return (
     <div className="flex min-h-screen">
+      {/* The session could not be checked. The page is left exactly as it
+          is — unsaved edits included — and we keep retrying in the
+          background. Only a real sign-out ends the session. */}
+      {reconnecting && (
+        <div className="fixed left-1/2 top-3 z-[100] flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-warning-500/30 bg-warning-50 px-4 py-2 shadow-pop">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-warning-500/40 border-t-warning-500" />
+          <span className="text-tiny font-medium text-warning-700">
+            Reconnecting… your work is safe
+          </span>
+          <button onClick={() => void refresh()}
+            className="text-tiny font-medium text-warning-700 underline">
+            Retry now
+          </button>
+        </div>
+      )}
       <aside className={`fixed inset-y-0 left-0 z-30 flex w-[228px] flex-col border-r border-line bg-surface transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex items-center gap-2.5 px-5 py-5">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white">{Icon.bell(15)}</span>

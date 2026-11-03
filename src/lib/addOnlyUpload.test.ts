@@ -18,13 +18,23 @@ const existing = (o: Record<string, unknown> = {}) =>
 /* ══════════ the reset screen is gone ══════════ */
 describe("an upload never offers a reset", () => {
   it("the confirm step goes straight to the add-only send", () => {
-    expect(up).toContain("if (BATCH_UPLOAD_ENABLED) {\n      await handleConfirmReplace();");
+    expect(up).toContain("await handleConfirmReplace();");
   });
 
-  it("upload_reset_preview is unreachable by default", () => {
-    // It survives only inside the opt-in legacy branch, after the early return.
-    expect(up.indexOf("await handleConfirmReplace();"))
-      .toBeLessThan(up.indexOf('"upload_reset_preview"'));
+  /** CODE only — the header comment explains what was removed. */
+  const code = up
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .split(String.fromCharCode(10))
+    .filter((l) => !l.trim().startsWith("//")).join(String.fromCharCode(10));
+
+  it("the Full reset dialog is GONE, not merely hidden", () => {
+    expect(code).not.toContain("replacePreview");
+    expect(code).not.toContain("Type RESET");
+  });
+
+  it("no upload path can call the reset functions any more", () => {
+    expect(code).not.toContain("upload_reset_preview");
+    expect(code).not.toContain("reset_campaigns_with_archive");
   });
 
   it("the confirm button states the number added, with no RESET step", () => {

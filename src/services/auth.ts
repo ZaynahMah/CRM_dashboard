@@ -56,13 +56,39 @@ export async function signIn(username: string, password: string) {
   return profile;
 }
 
-export async function getProfile(): Promise<Profile | null> {
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return null;
+/**
+ * The outcome of loading the signed-in profile.
+ *
+ * "no session" and "the call failed" used to collapse into `null`, so a
+ * network blip looked exactly like a sign-out and `AppShell` redirected to
+ * /login — losing any unsaved grid edits. They are now distinct.
+ */
+export type ProfileResult =
+  | { status: "ok"; profile: Profile }
+  | { status: "no-session" }
+  | { status: "error"; message: string };
+
+export async function loadProfile(): Promise<ProfileResult> {
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError) {
+    return { status: "error", message: authError.message };
+  }
+  if (!auth.user) return { status: "no-session" };
+
   const { data, error } = await supabase
     .from("profiles").select("*").eq("id", auth.user.id).single();
-  if (error) return null;
-  return data as Profile;
+  if (error) {
+    // A missing row is a real "no profile"; anything else is a failed call.
+    if (error.code === "PGRST116") return { status: "no-session" };
+    return { status: "error", message: error.message };
+  }
+  return { status: "ok", profile: data as Profile };
+}
+
+/** Back-compat wrapper. Prefer `loadProfile` — it keeps the distinction. */
+export async function getProfile(): Promise<Profile | null> {
+  const r = await loadProfile();
+  return r.status === "ok" ? r.profile : null;
 }
 
 export const signOut = () => supabase.auth.signOut();

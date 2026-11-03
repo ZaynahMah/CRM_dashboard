@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Campaign } from "@/types/campaign";
 import type { QcMap } from "@/lib/crmBuckets";
 import { contentSubmitted, withContent } from "@/lib/crmBuckets";
@@ -13,6 +13,10 @@ import {
 import {
   CAMPAIGN_CATEGORY_FILTER_OPTIONS, ALL_CATEGORIES_LABEL, filterByCategory,
 } from "@/lib/categoryFilter";
+import {
+  loadRejections, rejectedOnly, pendingExcludingRejected,
+  type RejectionInfo,
+} from "@/services/rejected";
 import { campaignDateIso } from "@/lib/campaignDate";
 import { planningWindow } from "@/lib/planningWindow";
 import { BulkWorkspace, type WorkspaceMode } from "./BulkWorkspace";
@@ -58,6 +62,19 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
    * exactly as the Show All PN filter does.
    */
   const [homeCategory, setHomeCategory] = useState<string>(ALL_CATEGORIES_LABEL);
+
+  /**
+   * PNs CRM sent back. ONE query for the whole board — the rejection lives
+   * in activity_logs, and fetching it per PN would be ~3,000 requests.
+   */
+  const [rejections, setRejections] = useState<Map<string, RejectionInfo>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    loadRejections()
+      .then((m) => { if (!cancelled) setRejections(m); })
+      .catch(() => { if (!cancelled) setRejections(new Map()); });
+    return () => { cancelled = true; };
+  }, [campaigns]);
 
   const { pending, submitted, title, pendingLabel, submittedLabel, mode } = useMemo(() => {
     if (role === "CATEGORY") {
@@ -238,8 +255,14 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
                 <div className="flex flex-wrap items-center gap-2.5 border-b border-line px-5 py-3.5">
                   <h3 className="font-display text-[15px] font-600 text-heading">{w.label}</h3>
                   <Pill dot={false} label={`All PN (${w.rows.length})`} tone="indigo" />
-                  <Pill dot={false} label={`Pending your input (${w.pending.length})`}
-                    tone={w.pending.length > 0 ? "warning" : "neutral"} />
+                  <Pill dot={false}
+                    label={`Pending your input (${pendingExcludingRejected(w.pending, rejections).length})`}
+                    tone={pendingExcludingRejected(w.pending, rejections).length > 0 ? "warning" : "neutral"} />
+                  {/* EXCLUSIVE: a rejected PN shows here and NOT under
+                      Pending your input. */}
+                  <Pill dot={false}
+                    label={`Rejected (${rejectedOnly(w.pending, rejections).length})`}
+                    tone={rejectedOnly(w.pending, rejections).length > 0 ? "danger" : "neutral"} />
                   <Pill dot={false} label={`Submitted to CRM (${w.submitted.length})`}
                     tone={w.submitted.length > 0 ? "success" : "neutral"} />
                   <div className="ml-auto flex items-center gap-2">
@@ -257,7 +280,19 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
                     </Button>
                   </div>
                 </div>
-                <QueueBucket label={pendingLabel} tone="warning" rows={w.pending} onOpen={onOpenCampaign} />
+                {rejectedOnly(w.pending, rejections).length > 0 && (
+                  <QueueBucket label="Rejected — sent back by CRM" tone="danger"
+                    rows={rejectedOnly(w.pending, rejections)}
+                    onOpen={onOpenCampaign}
+                    rowNote={(c) => {
+                      const r = rejections.get(c.id);
+                      if (!r) return undefined;
+                      return `Sent back by CRM${r.byName ? ` (${r.byName})` : ""}: ${r.reason}`;
+                    }} />
+                )}
+                <QueueBucket label={pendingLabel} tone="warning"
+                  rows={pendingExcludingRejected(w.pending, rejections)}
+                  onOpen={onOpenCampaign} />
                 <QueueBucket label={submittedLabel} tone="success" rows={w.submitted} onOpen={onOpenCampaign} />
               </Card>
             ))}
@@ -292,6 +327,7 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
             campaigns={workspace.rows}
             qc={qc}
             profileId={profileId}
+            rejectedIds={new Set(rejections.keys())}
             onClose={() => setWorkspace(null)}
             onSaved={onChanged}
             onPrimary={workspace.run}
@@ -341,6 +377,7 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
           campaigns={workspace.rows}
           qc={qc}
           profileId={profileId}
+          rejectedIds={new Set(rejections.keys())}
           onClose={() => setWorkspace(null)}
           onSaved={onChanged}
           onPrimary={workspace.run}
@@ -352,11 +389,13 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
   );
 }
 
-function QueueBucket({ label, tone, rows, onOpen }: {
+function QueueBucket({ label, tone, rows, onOpen, rowNote }: {
   label: string;
-  tone: "warning" | "success";
+  tone: "warning" | "success" | "danger";
   rows: Campaign[];
   onOpen: (id: string) => void;
+  /** Extra line under a row — CRM's reason on a rejected PN. */
+  rowNote?: (c: Campaign) => string | undefined;
   staleIds?: Set<string>;
   onReloadRow?: (id: string) => void;
 }) {
@@ -378,6 +417,11 @@ function QueueBucket({ label, tone, rows, onOpen }: {
                 <button onClick={() => onOpen(c.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                   <div className="min-w-0 flex-1">
                     <span className="text-[13px] font-medium text-heading">{c.campaign_name}</span>
+                    {rowNote?.(c) && (
+                      <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-600 text-danger-700 ring-1 ring-inset ring-[#FDA29B]">
+                        Sent back by CRM
+                      </span>
+                    )}
                     <span className="ml-2 text-micro text-faint">
                       {fmtDate(c.launch_date)} · {fmtTime(c.launch_time)}
                       {c.brand ? ` · ${c.brand}` : ""}
@@ -386,6 +430,12 @@ function QueueBucket({ label, tone, rows, onOpen }: {
                   {c.is_emergency && <Pill label="Emergency" tone="danger" />}
                   <Pill dot={false} label={c.pncc_segment_label ?? "—"} tone="indigo" />
                 </button>
+                {rowNote?.(c) && (
+                  <span className="max-w-[40%] shrink-0 truncate text-micro text-danger-700"
+                    title={rowNote(c)}>
+                    {rowNote(c)}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

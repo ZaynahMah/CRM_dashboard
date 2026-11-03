@@ -64,6 +64,7 @@ const BASE_COLUMNS: [string, (c: Campaign) => unknown][] = [
   ["Exp. CVR",        (c) => c.expected_cvr],
   ["Exp. RPV",        (c) => c.expected_rpv],
   ["Comments",        (c) => c.additional_notes],
+  ["Date / Time Brief", (c) => c.date_time_brief],
   // Who completed the row. A defaulted PN is filled by CRM, otherwise
   // Category submitted it. No name column exists on campaigns, so this
   // reports the TEAM rather than inventing a person.
@@ -105,10 +106,30 @@ function toCsv(rows: Campaign[], columns: [string, (c: Campaign) => unknown][]):
   return [head, ...body].join("\n");
 }
 
-export const incomingFromCategoryCsv = (rows: Campaign[]) => toCsv(rows, BASE_COLUMNS);
+/**
+ * Only PNs Category has SUBMITTED.
+ *
+ * The export is a handover of finished Category input, so a draft would be
+ * noise at best and misleading at worst. The caller passes the rows the
+ * section already shows, so the active date filter carries through.
+ */
+export const isCategorySubmitted = (c: Campaign) =>
+  c.category_status === "LOCKED" || c.category_status === "SUBMITTED";
+
+/** Only PNs Content has SUBMITTED. */
+export const isContentSubmitted = (c: Campaign) => c.content_status === "SUBMITTED";
+
+export const incomingFromCategoryRows = (rows: Campaign[]) =>
+  rows.filter(isCategorySubmitted);
+
+export const incomingFromContentRows = (rows: Campaign[]) =>
+  rows.filter(isContentSubmitted);
+
+export const incomingFromCategoryCsv = (rows: Campaign[]) =>
+  toCsv(incomingFromCategoryRows(rows), BASE_COLUMNS);
 
 export const incomingFromContentCsv = (rows: Campaign[]) =>
-  toCsv(rows, [...BASE_COLUMNS, ...CONTENT_COLUMNS]);
+  toCsv(incomingFromContentRows(rows), [...BASE_COLUMNS, ...CONTENT_COLUMNS]);
 
 /** CRM_<section>_<YYYY-MM-DD>.csv, dated in IST. */
 export function sectionFileName(section: string): string {

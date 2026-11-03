@@ -19,6 +19,7 @@ import {
 } from "@/config/pnOptions";
 import { SendBackModal } from "./SendBackModal";
 import { EditInputModal } from "./EditInputModal";
+import { rememberedRejectName, rememberRejectName } from "@/services/rejected";
 import {
   editGate, listPendingRequests, groupRequests, withdrawChangeGroup,
   rememberedRequestName, FIELD_LABEL, type ChangeRequestGroup,
@@ -127,6 +128,7 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
   useEffect(() => { void loadPending(); }, [loadPending]);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [changeReason, setChangeReason] = useState("");
+  const [rejectName, setRejectName] = useState(() => rememberedRejectName());
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -841,12 +843,22 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
             <textarea rows={3} value={changeReason} onChange={(e) => setChangeReason(e.target.value)}
               placeholder="Be specific — this goes back to Category as-is" />
           </Field>
+          <Field label="Your name" required>
+            <input value={rejectName} onChange={(e) => setRejectName(e.target.value)}
+              placeholder="Typed once, then remembered on this browser" />
+          </Field>
           <div className="flex justify-end gap-3">
             <Button variant="ghost" onClick={() => setRequestChangesOpen(false)}>Cancel</Button>
-            <Button variant="danger" disabled={!changeReason.trim() || busy} onClick={async () => {
+            <Button variant="danger"
+              disabled={!changeReason.trim() || !rejectName.trim() || busy}
+              onClick={async () => {
               setBusy(true);
               await api.updateCampaign(campaign.id, { category_status: "DRAFT" });
-              await api.log(campaign.id, profile.id, "CRM_REQUESTED_CHANGES", `CRM requested changes: ${changeReason}`);
+              rememberRejectName(rejectName);
+              /* "CRM (Name) requested changes: reason" — parseRejection in
+                 services/rejected.ts reads this back apart. */
+              await api.log(campaign.id, profile.id, "CRM_REQUESTED_CHANGES",
+                `CRM (${rejectName.trim()}) requested changes: ${changeReason}`);
               await api.notify("CATEGORY", "CHANGE_REQUESTED", "Changes requested",
                 `${campaign.campaign_name}: ${changeReason}`, campaign.id);
               setBusy(false); setRequestChangesOpen(false); setChangeReason(""); await refresh();

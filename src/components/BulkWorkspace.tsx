@@ -439,6 +439,7 @@ const QC_CHECKS: { key: keyof QcChecklist; label: string }[] = [
 
 export function BulkWorkspace({
   mode, campaigns, qc, profileId, onClose, onSaved, onPrimary, staleIds, onReloadRow,
+  rejectedIds,
 }: {
   mode: WorkspaceMode;
   campaigns: Campaign[];
@@ -448,6 +449,8 @@ export function BulkWorkspace({
   onSaved: () => void;
   /** Returns one outcome per campaign when the action can partially fail. */
   onPrimary: (ids: string[]) => Promise<BulkCalendarOutcome[] | void>;
+  /** Ids CRM sent back, for the "Rejected only" filter. */
+  rejectedIds?: Set<string>;
   /** Rows a realtime update arrived for while they had unsaved edits. */
   staleIds?: Set<string>;
   onReloadRow?: (id: string) => void;
@@ -472,6 +475,7 @@ export function BulkWorkspace({
    * Date filter on the PN's own campaign date. Both ends optional and
    * inclusive; it combines with the category filter.
    */
+  const [rejectedFilter, setRejectedFilter] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   /**
@@ -1003,6 +1007,7 @@ export function BulkWorkspace({
    */
   const visibleCampaigns = useMemo(() => {
     let rows = filterByCategory(campaigns, categoryFilter);
+    if (rejectedFilter && rejectedIds) rows = rows.filter((c) => rejectedIds.has(c.id));
     if (fromDate || toDate) {
       rows = rows.filter((c) => {
         const d = campaignDateIso(c.launch_date);
@@ -1018,10 +1023,11 @@ export function BulkWorkspace({
       });
     }
     return rows;
-  }, [campaigns, categoryFilter, fromDate, toDate]);
+  }, [campaigns, categoryFilter, fromDate, toDate, rejectedFilter, rejectedIds]);
 
   const filtersActive =
-    categoryFilter !== ALL_CATEGORIES_LABEL || fromDate !== "" || toDate !== "";
+    categoryFilter !== ALL_CATEGORIES_LABEL || fromDate !== "" || toDate !== ""
+    || rejectedFilter;
 
   useEffect(() => {
     const visibleIds = new Set(visibleCampaigns.map((c) => c.id));
@@ -1157,6 +1163,16 @@ export function BulkWorkspace({
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+          {/* Rejected only — PNs CRM sent back that Category has not yet
+              resubmitted. Category grid only. */}
+          {mode === "CATEGORY_INPUT" && rejectedIds && rejectedIds.size > 0 && (
+            <label className="flex items-center gap-1.5 text-[12px] text-body">
+              <input type="checkbox" checked={rejectedFilter}
+                onChange={(e) => setRejectedFilter(e.target.checked)} />
+              Rejected only ({rejectedIds.size})
+            </label>
+          )}
+
           {/* Date filter, on the PN's campaign date. Both ends optional. */}
           <input type="date" aria-label="From date" value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
@@ -1169,7 +1185,7 @@ export function BulkWorkspace({
               <Button size="sm" variant="ghost"
                 onClick={() => {
                   setCategoryFilter(ALL_CATEGORIES_LABEL);
-                  setFromDate(""); setToDate("");
+                  setFromDate(""); setToDate(""); setRejectedFilter(false);
                 }}>
                 Clear
               </Button>
