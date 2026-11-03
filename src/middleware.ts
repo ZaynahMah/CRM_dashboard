@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isSessionGone } from "@/lib/authError";
 import { createServerClient } from "@supabase/ssr";
 
 /**
@@ -17,25 +18,19 @@ import { createServerClient } from "@supabase/ssr";
 
 /** Which roles may reach which route prefix. Mirrors the nav in AppShell. */
 const ROUTE_ROLES: Record<string, readonly string[]> = {
-  /*
-   * REMOVED PAGES. Listed with NO roles rather than deleted from this map:
-   * an unlisted path falls through to "allowed", so removing the entry
-   * would have opened /qc and /audience to everyone instead of blocking
-   * them. An empty list matches no role, so every visit is turned away.
-   */
-  "/qc":          [],
-  "/audience":    [],
   "/overview":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/campaigns":   ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   // Operational management view: CRM and leadership only.
   "/sla":         ["CRM", "EXECUTIVE"],
+  "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/storage":     ["CRM"],
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
-  "/changes":     ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
+  "/changes":     ["CATEGORY", "CRM"],
   "/performance": ["CRM", "EXECUTIVE"],
   "/segments":    ["CRM"],
   "/final-view":  ["CRM"],
+  "/qc":          ["CRM"],
 };
 
 export async function middleware(req: NextRequest) {
@@ -70,7 +65,17 @@ export async function middleware(req: NextRequest) {
    * the request through untouched; the page's own guards still apply.
    */
   const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) return withRefreshedCookies(res, NextResponse.next());
+  /**
+   * A RETRYABLE failure passes through — that is the no-auto-logout rule.
+   * An auth error means the session is gone: redirect AND clear the auth
+   * cookies, or the browser keeps presenting a dead token and every
+   * subsequent request fails the same way. Waving those through is what
+   * made a post-logout refresh hang.
+   */
+  if (userError) {
+    if (isSessionGone(userError)) return redirectToLogin(req, res, true);
+    return withRefreshedCookies(res, NextResponse.next());
+  }
   const user = userData.user;
   if (!user) return redirectToLogin(req, res);
 
@@ -118,11 +123,24 @@ function withRefreshedCookies(from: NextResponse, to: NextResponse): NextRespons
   return to;
 }
 
-function redirectToLogin(req: NextRequest, res?: NextResponse) {
+/** Supabase stores its session in cookies whose names start with `sb-`. */
+function clearAuthCookies(req: NextRequest, to: NextResponse) {
+  for (const c of req.cookies.getAll()) {
+    if (c.name.startsWith("sb-")) to.cookies.delete(c.name);
+  }
+}
+
+function redirectToLogin(req: NextRequest, res?: NextResponse, sessionGone = false) {
   const to = req.nextUrl.clone();
   to.pathname = "/login";
   to.search = "";
   const redirect = NextResponse.redirect(to);
+  if (sessionGone) {
+    // Do NOT carry cookies forward here: the session is dead, and keeping
+    // it would send the browser straight back into the same failure.
+    clearAuthCookies(req, redirect);
+    return redirect;
+  }
   return res ? withRefreshedCookies(res, redirect) : redirect;
 }
 

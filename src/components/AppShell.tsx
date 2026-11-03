@@ -15,15 +15,17 @@ const NAV: NavItem[] = [
   { group:"General",href:"/campaigns",label:"All Campaigns",icon:Icon.list,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"General",href:"/calendar",label:"Calendar",icon:Icon.calendar,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"Planning",href:"/segments",label:"Audiences",icon:Icon.target,roles:["CRM"] },
+  { group:"Planning",href:"/audience",label:"Audience",icon:Icon.users,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"Planning",href:"/storage",label:"Storage",icon:Icon.database,roles:["CRM"] },
   { group:"Planning",href:"/sla",label:"Team SLA & Accountability",icon:Icon.alert,roles:["CRM","EXECUTIVE"] },
   { group:"Planning",href:"/emergency",label:"Emergency",icon:Icon.alert,roles:["CATEGORY","CRM","CONTENT"] },
   { group:"Execution",href:"/final-view",label:"Final View",icon:Icon.list,roles:["CRM"] },
+  { group:"Execution",href:"/qc",label:"Final QC",icon:Icon.check,roles:["CRM"] },
   { group:"Execution",href:"/performance",label:"Performance",icon:Icon.chart,roles:["CRM","EXECUTIVE"] },
-  { group:"Execution",href:"/changes",label:"Changes",icon:Icon.swap,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
+  { group:"Execution",href:"/changes",label:"Changes",icon:Icon.swap,roles:["CATEGORY","CRM"] },
 ];
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { profile, loading, reconnecting, refresh } = useSession();
+  const { profile, loading, reconnecting, refresh, beginSignOut } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
@@ -117,7 +119,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="border-t border-line p-3"><div className="flex items-center gap-2 px-2 py-2">
           <span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-100 text-[10px] font-600 text-indigo-700">{initials}</span>
           <div className="min-w-0 flex-1"><div className="truncate text-[12px] font-medium text-heading">{profile.display_name}</div><div className="truncate text-[10px] text-faint">{profile.role.toLowerCase()}@internal.local</div></div>
-          <button onClick={async () => { await signOut(); router.replace("/login"); }} className="rounded p-1 text-faint hover:text-danger-700">{Icon.logout(14)}</button>
+          <button onClick={async () => {
+            /**
+             * A deliberate sign-out, in order:
+             *  1. suppress the banner and drop the profile,
+             *  2. clear the session (signOut never throws),
+             *  3. HARD navigate — router.replace keeps React state alive,
+             *     which let the old provider state re-render the banner.
+             */
+            beginSignOut();
+            await signOut();
+            window.location.assign("/login");
+          }} className="rounded p-1 text-faint hover:text-danger-700">{Icon.logout(14)}</button>
         </div></div>
       </aside>
       {navOpen && <div className="fixed inset-0 z-20 bg-[#101828]/30 lg:hidden" onClick={() => setNavOpen(false)} />}

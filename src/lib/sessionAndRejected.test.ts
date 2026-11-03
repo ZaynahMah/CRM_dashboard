@@ -20,9 +20,11 @@ const shell = read("../components/AppShell.tsx");
 
 /* ══════════ ITEM 1 ══════════ */
 describe("a failed call never signs anyone out", () => {
-  it("getUser's error lets the request through", () => {
+  it("a RETRYABLE getUser error lets the request through", () => {
     expect(mw).toContain("const { data: userData, error: userError } = await supabase.auth.getUser();");
-    expect(mw).toContain("if (userError) return withRefreshedCookies(res, NextResponse.next());");
+    // An auth error now redirects instead — see logoutFix.test.ts.
+    expect(mw).toContain("if (isSessionGone(userError)) return redirectToLogin(req, res, true);");
+    expect(mw).toContain("return withRefreshedCookies(res, NextResponse.next());");
   });
 
   it("a failed profile read is not a missing role", () => {
@@ -52,7 +54,7 @@ describe("refreshed cookies survive every redirect", () => {
   });
 
   it("redirectToLogin takes the response so it can carry them", () => {
-    expect(mw).toContain("function redirectToLogin(req: NextRequest, res?: NextResponse)");
+    expect(mw).toContain("function redirectToLogin(req: NextRequest, res?: NextResponse, sessionGone = false)");
     expect(mw).toContain("return res ? withRefreshedCookies(res, redirect) : redirect;");
   });
 });
@@ -69,10 +71,11 @@ describe("no session and a failed call are different things", () => {
   });
 
   it("a failed load KEEPS the profile, so the page does not move", () => {
-    expect(sp).toContain('} else if (r.status === "error") {');
+    expect(sp).toContain('} else if (r.status === "error" && !signingOut.current) {');
     expect(sp).toContain("setReconnecting(true);");
     // Only the error branch, up to the start of the else.
-    const start = sp.indexOf('r.status === "error"');
+    // The branch is now guarded by !signingOut.current, so match on that.
+    const start = sp.indexOf('r.status === "error" && !signingOut.current');
     const block = sp.slice(start, sp.indexOf('} else {', start));
     expect(block).not.toContain("setProfile(null)");
   });
@@ -95,11 +98,18 @@ describe("no session and a failed call are different things", () => {
   });
 
   it("nothing signs the user out automatically", () => {
-    for (const f of [mw, sp, shell, auth]) {
+    /*
+     * The Log out button is the ONLY place that ends a session. AppShell
+     * now also calls beginSignOut() first, and auth.ts both declares and
+     * calls signOut, so a couple of mentions are expected — what matters
+     * is that no timer, handler or error path invokes it.
+     */
+    for (const f of [mw, sp]) {
       const code = f.replace(/\/\*[\s\S]*?\*\//g, " ");
-      const calls = (code.match(/signOut\(\)/g) ?? []).length;
-      expect(calls).toBeLessThanOrEqual(1);   // only the Log out button
+      expect((code.match(/signOut\(\)/g) ?? []).length).toBe(0);
     }
+    const shellCode = shell.replace(/\/\*[\s\S]*?\*\//g, " ");
+    expect((shellCode.match(/await signOut\(\)/g) ?? []).length).toBe(1);
   });
 });
 

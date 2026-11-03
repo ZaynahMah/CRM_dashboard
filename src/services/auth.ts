@@ -1,6 +1,7 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
+import { isSessionGone } from "@/lib/authError";
 import { USERNAME_TO_EMAIL, type Profile } from "@/types/user";
 
 /** The UI collects a username; Supabase Auth receives the mapped email. */
@@ -71,6 +72,13 @@ export type ProfileResult =
 export async function loadProfile(): Promise<ProfileResult> {
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError) {
+    /**
+     * An auth error means the session is GONE — sign the user out properly.
+     * Only a retryable failure keeps them where they are. Treating
+     * AuthSessionMissingError as "reconnecting" is what stopped Log out
+     * from working.
+     */
+    if (isSessionGone(authError)) return { status: "no-session" };
     return { status: "error", message: authError.message };
   }
   if (!auth.user) return { status: "no-session" };
@@ -80,6 +88,7 @@ export async function loadProfile(): Promise<ProfileResult> {
   if (error) {
     // A missing row is a real "no profile"; anything else is a failed call.
     if (error.code === "PGRST116") return { status: "no-session" };
+    if (isSessionGone(error)) return { status: "no-session" };
     return { status: "error", message: error.message };
   }
   return { status: "ok", profile: data as Profile };
@@ -91,4 +100,18 @@ export async function getProfile(): Promise<Profile | null> {
   return r.status === "ok" ? r.profile : null;
 }
 
-export const signOut = () => supabase.auth.signOut();
+/**
+ * A deliberate sign-out.
+ *
+ * `scope: "local"` clears this browser's stored session even when the
+ * server call fails, so a network problem can never leave someone stuck
+ * signed in. The caller then hard-navigates, which drops all React state.
+ */
+export async function signOut(): Promise<void> {
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Ignored on purpose: the local session is cleared either way and the
+    // caller is leaving the app.
+  }
+}
