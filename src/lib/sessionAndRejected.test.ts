@@ -165,7 +165,9 @@ describe("detecting a rejected PN", () => {
   it("the row shows a red badge and the reason", () => {
     const q = read("../components/RoleQueue.tsx");
     expect(q).toContain("Sent back by CRM");
-    expect(q).toContain("Rejected — sent back by CRM");
+    // Renamed: "Rejected" now means a declined change request only.
+    expect(q).toContain('label="Sent back by CRM"');
+    expect(q).toContain('Sent back by CRM (${rejectedOnly');
     expect(q).toContain("rowNote");
   });
 });

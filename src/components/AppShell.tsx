@@ -8,19 +8,21 @@ import { pendingChangeRequestCount, onChangeRequestsUpdated } from "@/services/c
 import { Drawer } from "./ui";
 import { Icon } from "./icons";
 import { listSystemNotifications, type SystemNotification } from "@/services/categorySla";
+import { loadRejections } from "@/services/rejected";
 import { fmtDate } from "@/lib/format";
 interface NavItem { href: string; label: string; roles: string[]; icon: () => React.ReactNode; group: string }
 const NAV: NavItem[] = [
   { group:"General",href:"/overview",label:"Dashboard",icon:Icon.home,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"General",href:"/campaigns",label:"All Campaigns",icon:Icon.list,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"General",href:"/calendar",label:"Calendar",icon:Icon.calendar,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
-  { group:"Planning",href:"/segments",label:"Audiences",icon:Icon.target,roles:["CRM"] },
+  { group:"Planning",href:"/audience",label:"Audience",icon:Icon.users,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
   { group:"Planning",href:"/storage",label:"Storage",icon:Icon.database,roles:["CRM"] },
   { group:"Planning",href:"/sla",label:"Team SLA & Accountability",icon:Icon.alert,roles:["CRM","EXECUTIVE"] },
   { group:"Planning",href:"/emergency",label:"Emergency",icon:Icon.alert,roles:["CATEGORY","CRM","CONTENT"] },
   { group:"Execution",href:"/final-view",label:"Final View",icon:Icon.list,roles:["CRM"] },
   { group:"Execution",href:"/performance",label:"Performance",icon:Icon.chart,roles:["CRM","EXECUTIVE"] },
   { group:"Execution",href:"/changes",label:"Changes",icon:Icon.swap,roles:["CATEGORY","CRM","CONTENT","EXECUTIVE"] },
+  { group:"Execution",href:"/sent-back",label:"Sent back by CRM",icon:Icon.alert,roles:["CATEGORY"] },
 ];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { profile, loading, reconnecting, refresh, beginSignOut } = useSession();
@@ -40,6 +42,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [alerts, setAlerts] = useState<SystemNotification[]>([]);
   /** Outstanding change requests, for the badge on the Changes nav item. */
   const [pendingChanges, setPendingChanges] = useState(0);
+  /** PNs CRM has sent back and Category has not yet resubmitted. */
+  const [sentBack, setSentBack] = useState(0);
   const [alertsLoaded, setAlertsLoaded] = useState(false);
 
   useEffect(() => {
@@ -51,6 +55,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .finally(() => { if (!cancelled) setAlertsLoaded(true); });
     return () => { cancelled = true; };
   }, [profile]);
+
+  /**
+   * The "Sent back by CRM" badge, for Category only.
+   *
+   * One query via loadRejections(), refreshed on navigation, so the count
+   * falls as soon as a PN is resubmitted.
+   */
+  useEffect(() => {
+    if (profile?.role !== "CATEGORY") { setSentBack(0); return; }
+    let cancelled = false;
+    loadRejections()
+      .then((m) => { if (!cancelled) setSentBack(m.size); })
+      .catch(() => { if (!cancelled) setSentBack(0); });
+    return () => { cancelled = true; };
+  }, [profile, pathname]);
 
   /**
    * Keeps the Changes badge current. It refreshes on navigation AND when
@@ -111,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {groups.map((g) => (<div key={g} className="mb-3"><div className="px-3 pb-1 text-[10px] font-600 uppercase tracking-wider text-faint">{g}</div>
             <ul className="space-y-0.5">{items.filter((i) => i.group === g).map((n) => {
               const active = pathname === n.href;
-              return (<li key={n.href}><Link href={n.href} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] transition-colors ${active ? "bg-indigo-50 font-medium text-indigo-700" : "text-body hover:bg-[#F9FAFB]"}`}><span className={active ? "text-indigo-600" : "text-faint"}>{n.icon()}</span>{n.label}{n.href === "/changes" && pendingChanges > 0 && (<span className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger-500 px-1.5 text-[10px] font-700 text-white">{pendingChanges > 99 ? "99+" : pendingChanges}</span>)}</Link></li>);
+              return (<li key={n.href}><Link href={n.href} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] transition-colors ${active ? "bg-indigo-50 font-medium text-indigo-700" : "text-body hover:bg-[#F9FAFB]"}`}><span className={active ? "text-indigo-600" : "text-faint"}>{n.icon()}</span>{n.label}{n.href === "/changes" && pendingChanges > 0 && (<span className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger-500 px-1.5 text-[10px] font-700 text-white">{pendingChanges > 99 ? "99+" : pendingChanges}</span>)}{n.href === "/sent-back" && sentBack > 0 && (<span className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger-500 px-1.5 text-[10px] font-700 text-white">{sentBack > 99 ? "99+" : sentBack}</span>)}</Link></li>);
             })}</ul></div>))}
         </nav>
         <div className="border-t border-line p-3"><div className="flex items-center gap-2 px-2 py-2">

@@ -62,7 +62,7 @@ describe("read policy (migration 17 campaigns_read)", () => {
 describe("route guards (middleware)", () => {
   /** /qc was removed from the nav and from ROUTE_ROLES. */
   it("CRM-only routes reject every other role", () => {
-    for (const path of ["/final-view", "/segments"]) {
+    for (const path of ["/final-view"]) {
       expect(canVisit("CRM", path)).toBe(true);
       for (const role of ["CATEGORY", "CONTENT", "EXECUTIVE"] as const) {
         expect(canVisit(role, path)).toBe(false);
@@ -99,7 +99,7 @@ describe("route guards (middleware)", () => {
   it("the removed pages are unreachable for every role", () => {
     for (const r of ["CRM", "CATEGORY", "CONTENT", "EXECUTIVE"]) {
       expect(canVisit(r as never, "/qc"), r).toBe(false);
-      expect(canVisit(r as never, "/audience"), r).toBe(false);
+      expect(canVisit(r as never, "/segments"), r).toBe(false);
     }
   });
 

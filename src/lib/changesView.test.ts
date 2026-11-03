@@ -130,18 +130,24 @@ describe("the removed pages", () => {
   it("are DENIED, not merely unlisted", () => {
     // An unlisted path falls through to "allowed" in canVisit, so removing
     // the entry would have opened them to everyone.
+    /*
+     * /audience ("Audience", the cohort page) was restored: the page that
+     * goes is /segments ("Audiences"), a different page entirely.
+     */
     expect(ROUTE_ROLES["/qc"]).toEqual([]);
-    expect(ROUTE_ROLES["/audience"]).toEqual([]);
+    expect(ROUTE_ROLES["/segments"]).toEqual([]);
     for (const r of ["CRM", "CATEGORY", "CONTENT", "EXECUTIVE"]) {
       expect(canVisit(r as never, "/qc"), r).toBe(false);
-      expect(canVisit(r as never, "/audience"), r).toBe(false);
+      expect(canVisit(r as never, "/segments"), r).toBe(false);
     }
   });
 
   it("are gone from the sidebar", () => {
     const shell = read("../components/AppShell.tsx");
     expect(shell).not.toContain('href:"/qc"');
-    expect(shell).not.toContain('href:"/audience"');
+    expect(shell).not.toContain('href:"/segments"');
+    // Audience is back, for all four roles.
+    expect(shell).toContain('href:"/audience"');
   });
 
   it("the Final QC WORK still lives in the board, untouched", () => {
@@ -196,5 +202,89 @@ describe("force delete", () => {
     const D = String.fromCharCode(36, 36);
     const top = sql43.split(D).filter((_, i) => i % 2 === 0).join(" ");
     expect(top).not.toMatch(/^\s*delete from/im);
+  });
+});
+
+/* ══════════ FIX 2 and FIX 3 ══════════ */
+describe("the single Category entry point", () => {
+  const drawer = read("../components/CampaignDrawer.tsx");
+
+  it("is one button, not two", () => {
+    expect(drawer).toContain("Click to edit your inputs");
+    expect(drawer).not.toContain("Save Category Inputs");
+    expect(drawer).not.toContain("Lock Input");
+  });
+
+  it("drops the Locking sentence", () => {
+    expect(drawer).not.toContain("Locking applies to this campaign only");
+  });
+
+  it("routes by how far the PN has travelled", () => {
+    expect(drawer).toContain('onCalendar ? { mode: "blocked", reason: "On calendar" }');
+    expect(drawer).toContain('{ mode: "blocked", reason: "Already sent to Content. Ask CRM." }');
+    expect(drawer).toContain(': submittedToCrm ? { mode: "request" }');
+    expect(drawer).toContain(': { mode: "direct" };');
+  });
+
+  it("a submitted PN goes to the change-request flow", () => {
+    expect(drawer).toContain('editEntry.mode === "request"');
+    expect(drawer).toContain("onClick={onEditInputs}");
+  });
+
+  it("the inner actions keep the 7-field gate", () => {
+    expect(drawer).toContain("Save draft");
+    expect(drawer).toContain("Submit to CRM");
+    expect(drawer).toContain("draftIsLockable(v)");
+  });
+
+  it("who may reopen a PN is unchanged", () => {
+    expect(drawer).toContain("api.lockCategoryInput(campaign.id, profileId)");
+  });
+});
+
+describe('"Sent back by CRM" replaces "Rejected" for Category', () => {
+  const queue = read("../components/RoleQueue.tsx");
+  const bulk = read("../components/BulkWorkspace.tsx");
+  const shell = read("../components/AppShell.tsx");
+
+  it("the week pill and section use the new wording", () => {
+    expect(queue).toContain("Sent back by CRM (${rejectedOnly");
+    expect(queue).toContain('label="Sent back by CRM"');
+  });
+
+  it("the Show All PN filter too", () => {
+    expect(bulk).toContain("Sent back by CRM only ({rejectedIds.size})");
+    expect(bulk).not.toContain("Rejected only (");
+  });
+
+  it("there is a nav item, Category only, with a count", () => {
+    expect(shell).toContain('href:"/sent-back",label:"Sent back by CRM"');
+    expect(shell).toContain('roles:["CATEGORY"]');
+    expect(shell).toContain('n.href === "/sent-back" && sentBack > 0');
+  });
+
+  it("the count uses the one-query detection", () => {
+    expect(shell).toContain("loadRejections()");
+    expect(shell).toContain('profile?.role !== "CATEGORY"');
+  });
+
+  it("the page is Category-only in both guards", () => {
+    expect(ROUTE_ROLES["/sent-back"]).toEqual(["CATEGORY"]);
+    expect(read("../middleware.ts")).toContain('"/sent-back":   ["CATEGORY"]');
+  });
+
+  it("it lists every sent-back PN with the reason, who and when", () => {
+    const page = read("../app/(app)/sent-back/page.tsx");
+    expect(page).toContain("isRejected(c, rejections)");
+    expect(page).toContain("r.reason");
+    expect(page).toContain("r.byName");
+    expect(page).toContain("fmtRelative(r.at)");
+    expect(page).toContain("Open PN");
+  });
+
+  it("resubmitting removes it, because detection is live", () => {
+    // isRejected needs category_status DRAFT; a resubmit makes it LOCKED.
+    const page = read("../app/(app)/sent-back/page.tsx");
+    expect(page).toContain("onChanged={() => { reload(); loadBack(); }}");
   });
 });

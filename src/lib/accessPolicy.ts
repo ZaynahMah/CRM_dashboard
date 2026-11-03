@@ -36,7 +36,7 @@ export const ROUTE_ROLES: Record<string, readonly AppRole[]> = {
    * them. An empty list matches no role, so every visit is turned away.
    */
   "/qc":          [],
-  "/audience":    [],
+  "/segments":    [],
   "/overview":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/campaigns":   ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
@@ -47,7 +47,8 @@ export const ROUTE_ROLES: Record<string, readonly AppRole[]> = {
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
   "/changes":     ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/performance": ["CRM", "EXECUTIVE"],
-  "/segments":    ["CRM"],
+  "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
+  "/sent-back":   ["CATEGORY"],
   "/final-view":  ["CRM"],
 };
 

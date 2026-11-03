@@ -449,7 +449,7 @@ export function BulkWorkspace({
   onSaved: () => void;
   /** Returns one outcome per campaign when the action can partially fail. */
   onPrimary: (ids: string[]) => Promise<BulkCalendarOutcome[] | void>;
-  /** Ids CRM sent back, for the "Rejected only" filter. */
+  /** Ids CRM sent back, for the "Sent back by CRM only" filter. */
   rejectedIds?: Set<string>;
   /** Rows a realtime update arrived for while they had unsaved edits. */
   staleIds?: Set<string>;
@@ -1163,13 +1163,13 @@ export function BulkWorkspace({
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-          {/* Rejected only — PNs CRM sent back that Category has not yet
-              resubmitted. Category grid only. */}
+          {/* PNs CRM sent back that Category has not yet resubmitted.
+              Category grid only. */}
           {mode === "CATEGORY_INPUT" && rejectedIds && rejectedIds.size > 0 && (
             <label className="flex items-center gap-1.5 text-[12px] text-body">
               <input type="checkbox" checked={rejectedFilter}
                 onChange={(e) => setRejectedFilter(e.target.checked)} />
-              Rejected only ({rejectedIds.size})
+              Sent back by CRM only ({rejectedIds.size})
             </label>
           )}
 

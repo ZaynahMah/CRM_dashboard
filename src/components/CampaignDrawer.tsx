@@ -473,7 +473,8 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
                These forms seed their state from props once, so without a key
                React would reuse one instance across two different campaigns
                and carry the previous row's values into the next one. */
-            <CategoryForm key={campaign.id} campaign={campaign} profileId={profile.id} onSaved={refresh} />
+            <CategoryForm key={campaign.id} campaign={campaign} profileId={profile.id}
+              onSaved={refresh} onEditInputs={() => { setEditError(null); setEditOpen(true); }} />
           ) : (
             <ReadGrid rows={[
               ["Sub Category", campaign.sub_category], ["Brand", campaign.brand],
@@ -874,8 +875,10 @@ export function CampaignDrawer({ campaignId, profile, onClose, onChanged }: {
 }
 
 /* ── Category inline form ── */
-function CategoryForm({ campaign, profileId, onSaved }: {
+function CategoryForm({ campaign, profileId, onSaved, onEditInputs }: {
   campaign: Campaign; profileId: string; onSaved: () => Promise<void>;
+  /** Opens the existing "Send these changes to CRM" flow. */
+  onEditInputs: () => void;
 }) {
   /**
    * Category's own input is locked once submitted — EXCEPT that Category may
@@ -886,6 +889,27 @@ function CategoryForm({ campaign, profileId, onSaved }: {
   const onCalendar = campaign.calendar_status === "UPDATED";
   const locked = campaign.category_status === "LOCKED" && onCalendar;
   const [editing, setEditing] = useState(false);
+
+  /**
+   * ONE entry point: "Click to edit your inputs".
+   *
+   * What it opens depends on how far the PN has travelled. A PN Category
+   * has already submitted goes through the change-request flow rather than
+   * a direct edit, which is what migration 42 enforces server-side anyway —
+   * the UI and the database now agree.
+   *
+   * Who may reopen a PN is unchanged; only the way in is.
+   */
+  const submittedToCrm =
+    campaign.category_status === "LOCKED" || campaign.category_status === "SUBMITTED";
+  const sentToContent = campaign.content_status !== "NOT_ASSIGNED";
+
+  const editEntry: { mode: "direct" | "request" | "blocked"; reason?: string } =
+    onCalendar ? { mode: "blocked", reason: "On calendar" }
+    : submittedToCrm && sentToContent
+      ? { mode: "blocked", reason: "Already sent to Content. Ask CRM." }
+    : submittedToCrm ? { mode: "request" }
+    : { mode: "direct" };
   // Seeded from this campaign only. The parent passes key={campaign.id}, so
   // a different campaign gets a different instance and this initialiser runs
   // again — one draft can never outlive the row it came from.
@@ -900,10 +924,44 @@ function CategoryForm({ campaign, profileId, onSaved }: {
   const errors = categoryErrors(v);
   const legacyNote = legacyDateTimeNote(v.date_time_brief);
 
-  // Once locked, Category (or CRM viewing on Category's behalf) can only
-  // request a change per field — never silently overwrite the submitted
-  // value. This is what feeds the Changes audit trail (original -> requested
-  // -> who -> when), reviewed on the Changes page.
+  /**
+   * The single entry point. Anything other than "direct" shows the saved
+   * values read-only, with one button that either opens the change-request
+   * flow or explains why it cannot.
+   */
+  if (editEntry.mode !== "direct" && !editing) {
+    return (
+      <div className="space-y-3">
+        <ReadGrid rows={[
+          ["Sub Category", campaign.sub_category], ["Brand", campaign.brand],
+          ["Offer", campaign.offer], ["Landing Link", campaign.landing],
+          ["Expected CVR", campaign.expected_cvr], ["Expected RPV", campaign.expected_rpv],
+          ["Category Brief", campaign.brief], ["Comments", campaign.additional_notes],
+        ]} />
+        {editEntry.mode === "request" ? (
+          <>
+            <p className="rounded-lg bg-[#F9FAFB] px-3 py-2 text-micro text-muted">
+              Submitted to CRM. Your changes go to CRM for approval; the
+              current values stay until they accept.
+            </p>
+            <Button size="sm" variant="ghost" onClick={onEditInputs}>
+              Click to edit your inputs
+            </Button>
+          </>
+        ) : (
+          <span title={editEntry.reason}>
+            <Button size="sm" variant="ghost" disabled>
+              Click to edit your inputs
+            </Button>
+            <span className="ml-2 text-micro text-faint">{editEntry.reason}</span>
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // Legacy path, kept for a PN already on the calendar: per-field change
+  // requests against the preserved original.
   if (locked && !editing) {
     return (
       <div className="space-y-3">
@@ -1030,7 +1088,7 @@ function CategoryForm({ campaign, profileId, onSaved }: {
             setError(e instanceof Error ? e.message : "Could not save this campaign.");
           }
           setBusy(false);
-        }}>Save Category Inputs</Button>
+        }}>Save draft</Button>
 
         <Button size="sm" disabled={busy} onClick={async () => {
           if (!draftIsLockable(v)) {
@@ -1047,11 +1105,8 @@ function CategoryForm({ campaign, profileId, onSaved }: {
             setError(e instanceof Error ? e.message : "Could not lock this campaign.");
           }
           setBusy(false);
-        }}>{Icon.check(13)} Lock Input</Button>
+        }}>{Icon.check(13)} Submit to CRM</Button>
       </div>
-      <p className="text-micro text-faint">
-        Locking applies to this campaign only and submits it to CRM. Only CRM can reopen it afterwards.
-      </p>
     </div>
   );
 }

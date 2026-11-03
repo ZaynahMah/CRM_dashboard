@@ -102,15 +102,17 @@ describe("the Audience page", () => {
    * every login. The page file and cohort_informations.json are KEPT on
    * purpose — the data is reference material — but nothing routes to it.
    */
-  it("is no longer in the sidebar for any role", () => {
-    expect(read("../components/AppShell.tsx")).not.toContain('href:"/audience"');
+  /** RESTORED: the page removed earlier was /segments, not this one. */
+  it("is back in the sidebar for all four roles", () => {
+    const shell = read("../components/AppShell.tsx");
+    const line = shell.split("\n").find((l) => l.includes('href:"/audience"'))!;
+    for (const r of ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"]) expect(line).toContain(r);
   });
 
-  it("is explicitly DENIED, not merely unlisted", () => {
-    // An unlisted path falls through to "allowed", so the entry stays with
-    // an empty role list: it matches no role and every visit is refused.
-    expect(read("../middleware.ts")).toContain('"/audience":    []');
-    expect(read("../lib/accessPolicy.ts")).toContain('"/audience":    []');
+  it("its route is open to the same four roles", () => {
+    for (const f of ["../middleware.ts", "../lib/accessPolicy.ts"]) {
+      expect(read(f)).toContain('"/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"]');
+    }
   });
 
   it("the page file and its data are still in the repo", () => {

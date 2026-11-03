@@ -26,7 +26,7 @@ const ROUTE_ROLES: Record<string, readonly string[]> = {
    * away. This mirrors ROUTE_ROLES in lib/accessPolicy.ts.
    */
   "/qc":          [],
-  "/audience":    [],
+  "/segments":    [],
   "/overview":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/campaigns":   ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/calendar":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
@@ -36,7 +36,8 @@ const ROUTE_ROLES: Record<string, readonly string[]> = {
   "/emergency":   ["CATEGORY", "CRM", "CONTENT"],
   "/changes":     ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
   "/performance": ["CRM", "EXECUTIVE"],
-  "/segments":    ["CRM"],
+  "/audience":    ["CATEGORY", "CRM", "CONTENT", "EXECUTIVE"],
+  "/sent-back":   ["CATEGORY"],
   "/final-view":  ["CRM"],
 };
 

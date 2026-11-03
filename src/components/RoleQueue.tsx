@@ -258,10 +258,12 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
                   <Pill dot={false}
                     label={`Pending your input (${pendingExcludingRejected(w.pending, rejections).length})`}
                     tone={pendingExcludingRejected(w.pending, rejections).length > 0 ? "warning" : "neutral"} />
-                  {/* EXCLUSIVE: a rejected PN shows here and NOT under
-                      Pending your input. */}
+                  {/* EXCLUSIVE: a sent-back PN shows here and NOT under
+                      Pending your input. "Sent back by CRM", never
+                      "Rejected" — that word means a declined change request
+                      on the Changes page. */}
                   <Pill dot={false}
-                    label={`Rejected (${rejectedOnly(w.pending, rejections).length})`}
+                    label={`Sent back by CRM (${rejectedOnly(w.pending, rejections).length})`}
                     tone={rejectedOnly(w.pending, rejections).length > 0 ? "danger" : "neutral"} />
                   <Pill dot={false} label={`Submitted to CRM (${w.submitted.length})`}
                     tone={w.submitted.length > 0 ? "success" : "neutral"} />
@@ -281,7 +283,7 @@ export function RoleQueue({ role, campaigns, qc, profileId, onOpenCampaign, onCh
                   </div>
                 </div>
                 {rejectedOnly(w.pending, rejections).length > 0 && (
-                  <QueueBucket label="Rejected — sent back by CRM" tone="danger"
+                  <QueueBucket label="Sent back by CRM" tone="danger"
                     rows={rejectedOnly(w.pending, rejections)}
                     onOpen={onOpenCampaign}
                     rowNote={(c) => {
