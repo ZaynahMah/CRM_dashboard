@@ -103,3 +103,73 @@ export function shiftRange(range: DateRange, days: number): DateRange {
   const e = toDate(range.end); e.setDate(e.getDate() + days);
   return { start: isoDate(s), end: isoDate(e) };
 }
+
+/* ─────────────── IST quick picks for the All Campaigns filter ─────────────── */
+
+/**
+ * Today in IST, as YYYY-MM-DD.
+ *
+ * `today()` in lib/format uses the BROWSER's local midnight, which is a day
+ * out for anyone not on IST. Campaign dates are Indian business days, so
+ * the quick picks resolve against Asia/Kolkata explicitly — no off-by-one
+ * for a user travelling, or for a server in another zone.
+ */
+export function istToday(now: Date = new Date()): string {
+  // en-CA renders as YYYY-MM-DD, which is the shape the column stores.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(now);
+}
+
+/** Adds days to a YYYY-MM-DD string without touching timezones. */
+export function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+export type QuickPick =
+  | "today" | "tomorrow" | "this-week" | "next-7" | "this-month";
+
+export const QUICK_PICKS: { key: QuickPick; label: string }[] = [
+  { key: "today",      label: "Today" },
+  { key: "tomorrow",   label: "Tomorrow" },
+  { key: "this-week",  label: "This week" },
+  { key: "next-7",     label: "Next 7 days" },
+  { key: "this-month", label: "This month" },
+];
+
+/**
+ * A quick pick resolved to an inclusive range.
+ *
+ * "This week" runs Monday to Sunday, the week the business plans in.
+ */
+export function quickPickRange(pick: QuickPick, now: Date = new Date()): DateRange {
+  const t = istToday(now);
+  switch (pick) {
+    case "today":
+      return { start: t, end: t };
+    case "tomorrow": {
+      const d = addDaysIso(t, 1);
+      return { start: d, end: d };
+    }
+    case "this-week": {
+      const [y, m, d] = t.split("-").map(Number);
+      // getUTCDay: 0 = Sunday, so Monday is 1 and Sunday counts as day 7.
+      const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+      const back = dow === 0 ? 6 : dow - 1;
+      const start = addDaysIso(t, -back);
+      return { start, end: addDaysIso(start, 6) };
+    }
+    case "next-7":
+      return { start: t, end: addDaysIso(t, 6) };
+    case "this-month": {
+      const [y, m] = t.split("-").map(Number);
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const mm = String(m).padStart(2, "0");
+      return { start: `${y}-${mm}-01`, end: `${y}-${mm}-${String(last).padStart(2, "0")}` };
+    }
+  }
+}

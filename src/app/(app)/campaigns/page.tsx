@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { campaignDateIso } from "@/lib/campaignDate";
+import type { DateRange } from "@/lib/dateRange";
 import {
   CAMPAIGN_CATEGORY_FILTER_OPTIONS, ALL_CATEGORIES_LABEL, matchesCategoryFilter,
 } from "@/lib/categoryFilter";
@@ -20,6 +23,11 @@ export default function CampaignsPage() {
   const [category, setCategory] = useState(ALL_CATEGORIES_LABEL);
   const [origin, setOrigin] = useState("");
   const [stage, setStage] = useState("");
+  /**
+   * Campaign-date filter. Held here, so it survives tab switches within the
+   * page and resets on navigation away — which is what was asked for.
+   */
+  const [dates, setDates] = useState<Partial<DateRange>>({});
 
   const rows = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -33,9 +41,20 @@ export default function CampaignsPage() {
         && !matchesCategoryFilter(c.pncc_category_code, category)) return false;
       if (origin && c.campaign_origin !== origin) return false;
       if (stage && stageOf(c) !== stage) return false;
+      /**
+       * ANDed with every other filter, never replacing them. A PN with no
+       * usable date is excluded only while a date filter is on, so it can
+       * still be found by clearing it.
+       */
+      if (dates.start || dates.end) {
+        const d = campaignDateIso(c.launch_date);
+        if (d === null) return false;
+        if (dates.start && d < dates.start) return false;
+        if (dates.end && d > dates.end) return false;
+      }
       return true;
     });
-  }, [campaigns, q, category, origin, stage]);
+  }, [campaigns, q, category, origin, stage, dates]);
 
   if (!profile) return null;
 
@@ -94,6 +113,12 @@ export default function CampaignsPage() {
             {STAGE_ORDER.map((s) => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}
           </select>
         </label>
+
+        {/* Campaign date. ANDed with the four filters above. */}
+        <div className="md:col-span-4">
+          <span className="mb-1.5 block text-tiny font-medium text-body">Campaign date</span>
+          <DateRangeFilter value={dates} onChange={setDates} matching={rows.length} />
+        </div>
       </Card>
 
       {loading ? <Loading /> : rows.length === 0 ? (
