@@ -33,6 +33,10 @@ import {
   type IncompleteCategoryPn,
 } from "@/lib/categoryValidation";
 import { campaignDateIso } from "@/lib/campaignDate";
+import {
+  rangeBetween, inRange, parseClipboard, toClipboard, planPaste, pasteSummary,
+  type CellRef, type PastePlan,
+} from "@/lib/gridClipboard";
 import { rowLabel } from "@/services/campaigns";
 import { listCustomOptions, addCustomOption } from "@/services/customOptions";
 import { FIXED_TRACKING_VALUES } from "@/lib/trackingFields";
@@ -476,6 +480,16 @@ export function BulkWorkspace({
    * inclusive; it combines with the category filter.
    */
   const [rejectedFilter, setRejectedFilter] = useState(false);
+
+  /* ── Excel-style copy and paste (Category grid only) ── */
+  const isCategoryGrid = mode === "CATEGORY_INPUT";
+  const [anchor, setAnchor] = useState<CellRef | null>(null);
+  const [focusCell, setFocusCell] = useState<CellRef | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [pasteNote, setPasteNote] = useState<PastePlan | null>(null);
+  const [showSkipped, setShowSkipped] = useState(false);
+  /** One level of undo: the dirty values a paste replaced. */
+  const undoRef = useRef<{ id: string; key: string; before: unknown }[] | null>(null);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   /**
@@ -1025,6 +1039,131 @@ export function BulkWorkspace({
     return rows;
   }, [campaigns, categoryFilter, fromDate, toDate, rejectedFilter, rejectedIds]);
 
+  /**
+   * Which columns Category may write, read from the column set itself so a
+   * new read-only column is respected without touching this code.
+   */
+  const editableKeys = useMemo(
+    () => new Set(columns.filter((c) => c.type !== "readonly" && c.type !== "deadline")
+      .map((c) => String(c.key))), [columns]);
+
+  /**
+   * Rows a paste must not touch. Category submitted them, so typing in the
+   * grid may still reach them but a bulk paste deliberately will not.
+   */
+  const lockedRowIds = useMemo(
+    () => new Set(visibleCampaigns
+      .filter((c) => c.category_status === "LOCKED" || c.category_status === "SUBMITTED")
+      .map((c) => c.id)), [visibleCampaigns]);
+
+  const selection = anchor && focusCell ? rangeBetween(anchor, focusCell) : null;
+
+  /** Copies the selection as TSV, so it also pastes into Excel. */
+  const copySelection = useCallback(() => {
+    if (!selection) return;
+    const text = toClipboard(
+      visibleCampaigns, columns.map((c) => String(c.key)), selection,
+      (c, k) => valueOf(c, k as keyof Campaign));
+    void navigator.clipboard?.writeText(text);
+  }, [selection, visibleCampaigns, columns, valueOf]);
+
+  /**
+   * Fills the grid from the clipboard. It writes into the same `dirty` map
+   * typing writes to, so nothing is submitted and Save Draft persists it in
+   * one batch — no request per cell.
+   */
+  const pasteInto = useCallback((text: string) => {
+    if (!focusCell) return;
+    const values = parseClipboard(text);
+    if (values.length === 0) return;
+
+    const plan = planPaste({
+      rows: visibleCampaigns,
+      cols: columns.map((c) => String(c.key)),
+      labels: Object.fromEntries(columns.map((c) => [String(c.key), c.label])),
+      editable: editableKeys,
+      lockedRowIds,
+      options: Object.fromEntries(columns
+        .filter((c) => c.options && c.options.length > 0)
+        .map((c) => [String(c.key), c.options as readonly string[]])),
+    }, values, focusCell, selection ?? undefined);
+
+    if (plan.writes.length > 0) {
+      // Snapshot first, so one Ctrl+Z puts everything back.
+      undoRef.current = plan.writes.map((w) => ({
+        id: w.rowId, key: w.key,
+        before: dirty[w.rowId]?.[w.key as keyof Campaign],
+      }));
+      setDirty((prev) => {
+        const next = { ...prev };
+        for (const w of plan.writes) {
+          next[w.rowId] = { ...next[w.rowId], [w.key]: w.value };
+        }
+        return next;
+      });
+    }
+    setPasteNote(plan);
+    setShowSkipped(false);
+  }, [focusCell, selection, visibleCampaigns, columns, editableKeys, lockedRowIds, dirty]);
+
+  /** Undoes the last paste, restoring exactly what each cell held. */
+  const undoPaste = useCallback(() => {
+    const snap = undoRef.current;
+    if (!snap) return;
+    setDirty((prev) => {
+      const next = { ...prev };
+      for (const u of snap) {
+        const row = { ...next[u.id] };
+        if (u.before === undefined) delete row[u.key as keyof Campaign];
+        else row[u.key as keyof Campaign] = u.before as never;
+        next[u.id] = row;
+      }
+      return next;
+    });
+    undoRef.current = null;
+    setPasteNote(null);
+  }, []);
+
+  /**
+   * Ctrl/Cmd + C / V / Z while a cell is selected.
+   *
+   * Ignored when the user is typing in an input, so single-cell editing
+   * behaves exactly as before.
+   */
+  useEffect(() => {
+    if (!isCategoryGrid) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const el = e.target as HTMLElement | null;
+      const typing = el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+      const key = e.key.toLowerCase();
+
+      if (key === "c" && selection && !typing) {
+        copySelection(); e.preventDefault(); return;
+      }
+      if (key === "v" && focusCell && !typing) {
+        e.preventDefault();
+        void navigator.clipboard?.readText()
+          .then((t) => pasteInto(t))
+          .catch(() => setPasteNote({ writes: [], skipped: [] }));
+        return;
+      }
+      if (key === "z" && undoRef.current && !typing) {
+        undoPaste(); e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isCategoryGrid, selection, focusCell, copySelection, pasteInto, undoPaste]);
+
+  /** A drag that ends anywhere releases the selection. */
+  useEffect(() => {
+    if (!dragging) return;
+    const up = () => setDragging(false);
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, [dragging]);
+
   const filtersActive =
     categoryFilter !== ALL_CATEGORIES_LABEL || fromDate !== "" || toDate !== ""
     || rejectedFilter;
@@ -1259,6 +1398,37 @@ export function BulkWorkspace({
             {done && <span className="flex items-center gap-1.5 text-micro text-success-700">{Icon.check(12)} {done}</span>}
             {error && <span className="flex items-center gap-1.5 text-micro text-danger-700">{Icon.alert(12)} {error}</span>}
 
+            {/* What the last paste did. Clicking it lists what was skipped. */}
+            {pasteNote && (
+              <div className="w-full">
+                <button onClick={() => setShowSkipped((v) => !v)}
+                  className="flex items-center gap-1.5 text-micro font-medium text-indigo-700 hover:underline">
+                  {pasteSummary(pasteNote)}
+                  {pasteNote.skipped.length > 0 && (showSkipped ? " — hide" : " — why?")}
+                </button>
+                {showSkipped && pasteNote.skipped.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {pasteNote.skipped.slice(0, 12).map((sk, n) => (
+                      <li key={`${sk.row}-${sk.col}-${n}`} className="text-micro text-muted">
+                        Row {sk.row + 1} · {sk.label} — {sk.reason}
+                      </li>
+                    ))}
+                    {pasteNote.skipped.length > 12 && (
+                      <li className="text-micro text-faint">
+                        …and {pasteNote.skipped.length - 12} more.
+                      </li>
+                    )}
+                  </ul>
+                )}
+                {undoRef.current && (
+                  <button onClick={undoPaste}
+                    className="mt-1 text-micro font-medium text-indigo-700 hover:underline">
+                    Undo paste (Ctrl+Z)
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* ADDITION A: exactly which PNs blocked the send, and a way to
                 jump straight to them. */}
             {incomplete.length > 0 && (
@@ -1443,11 +1613,23 @@ export function BulkWorkspace({
                     )}
                   </td>
 
-                  {columns.map((col) => (
+                  {columns.map((col, ci) => (
                     <td key={String(col.key)}
+                      /* Excel-style selection, Category grid only. mousedown
+                         starts a range, mouseenter extends it while dragging,
+                         and shift+click extends from the anchor. */
+                      onMouseDown={isCategoryGrid ? (e) => {
+                        const cell = { row: i, col: ci };
+                        if (e.shiftKey && anchor) setFocusCell(cell);
+                        else { setAnchor(cell); setFocusCell(cell); setDragging(true); }
+                      } : undefined}
+                      onMouseEnter={isCategoryGrid && dragging
+                        ? () => setFocusCell({ row: i, col: ci }) : undefined}
                       /* FIXED_CELL caps the height in virtualised modes so a
                          cell cannot make the row taller than rowH. */
                       className={`border-b border-r border-line p-0 ${
+                        isCategoryGrid && selection && inRange(selection, i, ci)
+                          ? "bg-indigo-50 ring-1 ring-inset ring-indigo-200 " : ""}${
                         wrapRows ? "align-top" : FIXED_CELL}${
                         // ADDITION A: the exact cells that block the send.
                         incompleteIds.has(c.id)
